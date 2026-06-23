@@ -572,6 +572,9 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
             pie1.add_data(data, titles_from_data=False)
             pie1.set_categories(cats)
             pie1.dataLabels = _labels_cat_pourcentage()
+            # Tracer les données même si les colonnes source sont masquées
+            # (sinon Excel n'affiche rien quand V/W sont cachées).
+            pie1.visible_cells_only = False
             ws.add_chart(pie1, "E4")
             # Colonnes techniques (source du camembert) masquées : usage interne
             ws.column_dimensions[get_column_letter(COL_LAB)].hidden = True
