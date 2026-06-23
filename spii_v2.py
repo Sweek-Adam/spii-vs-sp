@@ -175,8 +175,9 @@ def construire_modele(csv_path, dict_param):
         nom_onglet = ressource[:30]
         c = collab_data.setdefault(nom_onglet, {"role": dict_param[ressource_maj],
                                                 "rows": [], "total": 0.0})
-        feat_root = code if est_tcre else (
-            "" if str(row["Projet"]).upper() == "TOTAL" else "Autre / Hors Feature")
+        # Les lignes "TOTAL" du CSV ont déjà été exclues plus haut, donc une
+        # ligne non-TCRE est forcément une vraie ligne hors feature.
+        feat_root = code if est_tcre else "Autre / Hors Feature"
         c["rows"].append([row["Projet"], livrable, feat_root] + valeurs + [total_ligne])
         c["total"] += total_ligne
 
@@ -299,7 +300,7 @@ def _ajuster_colonnes(ws, largeur_min=8, largeur_max=45):
         ws.column_dimensions[col].width = largeur
 
 
-def ecrire_classeur(modele, jira, sortie_path,cfg):
+def ecrire_classeur(modele, jira, sortie_path, cfg):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
 
@@ -318,7 +319,6 @@ def ecrire_classeur(modele, jira, sortie_path,cfg):
 
     # Style de lien interne (bleu souligné, comme un hyperlien classique)
     FONT_LIEN = Font(name="Arial", color="0563C1", underline="single")
-
 
     projet = cfg["jira"]["projet"]
     # --- Suivi_Features ---
@@ -622,7 +622,7 @@ def main():
 
     print(f"Écriture du classeur openpyxl -> {os.path.basename(sortie)}...")
     chrono("Écriture openpyxl",
-           lambda: ecrire_classeur(modele, jira, sortie,cfg))
+           lambda: ecrire_classeur(modele, jira, sortie, cfg))
 
     print(f"\n✅ Terminé : {sortie}")
 
