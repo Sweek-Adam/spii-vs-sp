@@ -263,8 +263,8 @@ détaillé ci-dessous.
 [jira]
 email    = "prenom.nom@exemple.com"
 url      = "https://votre-instance.atlassian.net"
-sp_field = "customfield_XXXXX"
-pi_field = "customfield_XXXXX"
+sp_field = "customfield_10024"
+pi_field = "customfield_11400"
 projet   = "PROJET"
 ```
 
