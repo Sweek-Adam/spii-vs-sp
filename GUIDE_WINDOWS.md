@@ -101,6 +101,7 @@ pas utilisé le questionnaire — voir la section 4.3 pour le détail de chaque 
 > détaillent la procédure manuelle correspondante.
 
 ---
+
 ## 3. Lancer le script
 
 Le projet fournit **`lancer.ps1`** : clic droit dessus → **« Exécuter avec
@@ -108,8 +109,13 @@ PowerShell »**, et c'est parti. Il lit le chemin de Python depuis `config.toml`
 lance la génération, et garde la fenêtre ouverte à la fin pour que tu lises les
 messages.
 
+> **Si tu as utilisé la voie rapide (chapitre 2)**, tout est déjà prêt :
+> `initialiser.ps1` a renseigné `python_exe` et réglé l'autorisation des
+> scripts. Tu peux lancer `lancer.ps1` directement.
+
 **Prérequis** : le champ `python_exe` doit être renseigné dans `config.toml`
-(section `[chemins]`). Mets-y le chemin complet vers le `python.exe` de
+(section `[chemins]`) — c'est le cas automatiquement si tu as utilisé
+`initialiser.ps1`. Sinon, mets-y le chemin complet vers le `python.exe` de
 WinPython, par exemple :
 
 ```toml
@@ -125,24 +131,16 @@ python_exe = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\
 > Si le champ est vide ou le chemin faux, `lancer.ps1` s'arrête avec un message
 > t'indiquant quoi corriger.
 
-**Avant le tout premier lancement**, Windows bloque par défaut l'exécution des
-scripts PowerShell. Autorise-les pour ton compte (sans droits admin) en lançant
-une fois cette commande dans PowerShell :
-
-```
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
-
-Réponds `O` (ou `Y`) si une confirmation est demandée. Ce réglage est durable
-(à faire une seule fois) et sûr : il autorise les scripts locaux comme
-`lancer.ps1` tout en bloquant les scripts non signés téléchargés d'Internet.
-Ensuite, tu peux lancer `lancer.ps1` autant de fois que tu veux.
+**Autorisation des scripts** : si tu n'as pas encore autorisé l'exécution des
+scripts PowerShell, fais-le une fois (voir l'étape préalable du chapitre 2). Une
+fois cela fait, tu peux lancer `lancer.ps1` autant de fois que tu veux.
 
 Le script :
 1. lit le CSV,
 2. interroge Jira en parallèle,
-3. génère un fichier horodaté (ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`) dans le
-   dossier de sortie indiqué en config (créé s'il n'existe pas).
+3. génère un fichier nommé d'après le projet et horodaté (ex.
+   `SPII_vs_SP_LIEVRE_2026-06-23_10h38.xlsx`) dans le dossier de sortie indiqué
+   en config (créé s'il n'existe pas).
 
 Aucun fichier existant n'est modifié. Le fichier généré s'ouvre automatiquement
 à la fin.
@@ -188,9 +186,9 @@ pip.
 
 #### Décompresser
 
-2. Double-clique sur le fichier `.exe` téléchargé. **Ce n'est pas un
-   installeur** : il décompresse simplement un dossier à l'emplacement que tu
-   choisis. Aucun droit admin requis.
+2. Double-clique sur le fichier `.exe` téléchargé. Il te demande un dossier de
+   destination puis y extrait WinPython. Aucun droit admin requis (rien n'est
+   installé dans le système : tout reste dans le dossier choisi).
 3. ⚠ **Choisis un emplacement avec un chemin court** (moins de ~37 caractères).
    Par exemple `C:\WPy` ou `C:\Outils\WPy` plutôt qu'un dossier profondément
    imbriqué — WinPython le recommande pour éviter des soucis.
@@ -255,6 +253,9 @@ détaillé ci-dessous.
 - **`url`** — l'adresse de ton instance Jira, ex. `https://imsa.atlassian.net`.
 - **`sp_field`** — l'identifiant du champ Story Points (de la forme
   `customfield_XXXXX`). Si tu ne le connais pas, demande-le à ton admin Jira.
+- **`pi_field`** — l'identifiant du champ Planning Interval (de la forme
+  `customfield_XXXXX`). Sert à afficher le PI des features. Optionnel : si tu le
+  laisses vide, cette colonne reste simplement vide.
 - **`projet`** — le préfixe des tickets à comptabiliser (ex. `LIEVRE`), utilisé
   pour filtrer les liens dans Jira.
 
@@ -263,6 +264,7 @@ détaillé ci-dessous.
 email    = "prenom.nom@exemple.com"
 url      = "https://votre-instance.atlassian.net"
 sp_field = "customfield_XXXXX"
+pi_field = "customfield_XXXXX"
 projet   = "PROJET"
 ```
 
@@ -270,8 +272,8 @@ projet   = "PROJET"
 
 - **`csv`** — chemin complet du fichier export SPII à lire (il doit exister).
 - **`dossier_sortie`** — dossier où écrire le fichier généré (créé
-  automatiquement s'il n'existe pas). Le nom du fichier produit est
-  automatique et horodaté (ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`).
+  automatiquement s'il n'existe pas). Le nom du fichier produit est automatique :
+  il reprend le projet et un horodatage (ex. `SPII_vs_SP_LIEVRE_2026-06-23_10h38.xlsx`).
 - **`python_exe`** — chemin complet vers le `python.exe` de WinPython.
   Sert **uniquement** au script de lancement `lancer.ps1` (voir chapitre 3).
   Astuce : dans l'explorateur, Maj + clic droit sur `python.exe` →
@@ -324,8 +326,10 @@ token :
 
 ```toml
 [jira]
-api_token = "colle_ton_token_ici"
+api_token = "REMPLACE_PAR_TON_TOKEN"
 ```
+
+Remplace `REMPLACE_PAR_TON_TOKEN` par le token que tu viens de copier.
 
 ### 4.4 En cas de souci (dépannage)
 

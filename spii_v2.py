@@ -4,7 +4,7 @@ SPII vs SP — Version 2 (openpyxl, rapide)
 Flux entièrement en mémoire, Excel jamais ouvert :
   1. Lecture CSV (avec conversion des décimales à virgule 0,125 -> 0.125)
   2. Construction du modèle métier en mémoire
-  3. Appels Jira en parallèle (titres + Story Points)
+  3. Appels Jira en parallèle (titres + Story Points + Planning Interval + statut)
   4. Écriture du fichier .xlsx final d'un coup (openpyxl)
 
 Génère un NOUVEAU fichier .xlsx ; l'original n'est pas touché.
@@ -726,7 +726,10 @@ def ouvrir_fichier(chemin):
 def main():
     cfg = charger_config()
     token = cfg["jira"]["api_token"]
-    if not token or token == "REMPLACE_PAR_TON_NOUVEAU_TOKEN":
+    # Placeholders connus (config exemple / questionnaire) = token non renseigné.
+    placeholders = {"REMPLACE_PAR_TON_TOKEN", "REMPLACE_PAR_TON_NOUVEAU_TOKEN",
+                    "colle_ton_token_ici"}
+    if not token or token in placeholders:
         print(f"❌ Token Jira manquant dans {SECRETS_PATH}")
         return
 
