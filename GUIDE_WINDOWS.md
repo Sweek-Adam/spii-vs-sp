@@ -174,25 +174,38 @@ api_token = "colle_ton_token_ici"
 ### Méthode simple — le script `lancer.ps1`
 
 Le projet fournit **`lancer.ps1`** : clic droit dessus → **« Exécuter avec
-PowerShell »**, et c'est parti. Il se place tout seul dans le bon dossier,
+PowerShell »**, et c'est parti. Il lit le chemin de Python depuis `config.toml`,
 lance la génération, et garde la fenêtre ouverte à la fin pour que tu lises les
 messages.
 
-> Si tu n'as PAS ajouté WinPython au PATH (section 2), ouvre `lancer.ps1` avec
-> un éditeur de texte et renseigne le chemin complet vers le `python.exe` de
-> WinPython dans la variable `$python` (une ligne d'exemple est déjà prête à
-> décommenter).
+**Prérequis** : le champ `python_exe` doit être renseigné dans `config.toml`
+(section `[chemins]`). Mets-y le chemin complet vers le `python.exe` de
+WinPython, par exemple :
+
+```toml
+[chemins]
+python_exe = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\python.exe'
+```
+
+> Astuce pour trouver ce chemin : dans l'explorateur, ouvre le dossier
+> `WinPython\WPy...\python`, fais Maj + clic droit sur `python.exe` →
+> « Copier en tant que chemin d'accès », et colle-le (entre guillemets simples)
+> dans config.toml.
+>
+> Si le champ est vide ou le chemin faux, `lancer.ps1` s'arrête avec un message
+> t'indiquant quoi corriger.
 
 ### Méthode manuelle — en ligne de commande
 
-Sinon, dans un terminal (le « WinPython Command Prompt », ou n'importe quel
-terminal si WinPython est dans ton PATH), place-toi dans le dossier du projet
-et lance :
+Sinon, en ligne de commande, en appelant directement le python.exe de
+WinPython (remplace par ton chemin) :
 
 ```
-cd C:\chemin\vers\ton\projet
-python spii_v2.py
+& 'C:\...\WinPython\WPy64-31450\python\python.exe' spii_v2.py
 ```
+
+(ou simplement `python spii_v2.py` si tu as ajouté WinPython au PATH — voir la
+section optionnelle 2.)
 
 ### Dans les deux cas
 
