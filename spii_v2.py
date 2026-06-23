@@ -715,9 +715,15 @@ def main():
     dossier_sortie = os.path.normpath(cfg["chemins"]["dossier_sortie"])
     os.makedirs(dossier_sortie, exist_ok=True)
 
-    # Nom du fichier généré : horodaté (date + heure) pour ne rien écraser.
+    # Nom du fichier généré : SPII_vs_SP_<PROJET>_<date>_<heure>.xlsx
+    # Le projet vient de la config ; on retire d'éventuels caractères interdits
+    # dans un nom de fichier (/ \ : * ? " < > |).
+    projet = str(cfg["jira"].get("projet", "")).strip()
+    projet_safe = re.sub(r'[\\/:*?"<>|]', "_", projet)
     horodatage = datetime.now().strftime("%Y-%m-%d_%Hh%M")
-    sortie = os.path.join(dossier_sortie, f"SPII_vs_SP_{horodatage}.xlsx")
+    bloc_projet = f"{projet_safe}_" if projet_safe else ""
+    sortie = os.path.join(dossier_sortie,
+                          f"SPII_vs_SP_{bloc_projet}{horodatage}.xlsx")
 
     print("Construction du modèle métier...")
     modele = chrono("Lecture CSV + modèle",
