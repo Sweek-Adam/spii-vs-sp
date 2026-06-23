@@ -65,7 +65,7 @@ git status
 
 **Vérifie cette liste attentivement.** Tu DOIS y voir :
 - `spii_v2.py`, `README.md`, `GUIDE_WINDOWS.md`, `GUIDE_GIT.md`
-- `config.windows.exemple.toml`, `secrets.toml.exemple`, `.gitignore`
+- `config.toml.exemple`, `secrets.toml.exemple`, `.gitignore`
 
 Tu ne dois **PAS** y voir :
 - `secrets.toml`, `config.toml`
