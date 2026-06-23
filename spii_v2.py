@@ -113,6 +113,9 @@ def _labels_cat_pourcentage():
     """Étiquettes de camembert affichant la CATÉGORIE + le POURCENTAGE.
     Désactive explicitement nom de série, valeur brute et clé de légende
     (sinon openpyxl affiche 'Série1; Catégorie; Valeur; %').
+
+    Note : les parts à 0 sont exclues en amont (on ne les écrit pas dans le
+    tableau source du camembert), donc aucune étiquette "0%" n'apparaît.
     """
     dl = DataLabelList()
     dl.showCatName = True       # ex. "Nom Prénom"
@@ -250,12 +253,20 @@ def _couleur_degrade(t):
     return f"{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
 
 
-def _appliquer_degrade(ws, col_letter, row_min, row_max):
+def _appliquer_degrade(ws, col_letter, row_min, row_max, lignes_exclues=None):
     """Colore le fond des cellules d'une colonne selon leur valeur (vert->rouge).
     Couleur figée (cohérent avec le choix valeurs figées de la V2).
+
+    lignes_exclues : ensemble de numéros de lignes (absolus) à NE PAS colorer.
+    Ces lignes sont aussi ignorées dans le calcul du min/max, pour ne pas
+    fausser l'échelle du dégradé.
     """
+    lignes_exclues = lignes_exclues or set()
     vals = []
     for r in range(row_min, row_max + 1):
+        if r in lignes_exclues:
+            vals.append(None)  # ni colorée, ni comptée dans l'échelle
+            continue
         v = ws[f"{col_letter}{r}"].value
         vals.append(v if isinstance(v, (int, float)) else None)
     nums = [v for v in vals if v is not None]
@@ -300,6 +311,30 @@ def _ajuster_colonnes(ws, largeur_min=8, largeur_max=45):
         ws.column_dimensions[col].width = largeur
 
 
+def _ajouter_legende_degrade(ws, cell_ancre):
+    """Ajoute une petite légende expliquant le dégradé de couleurs.
+    Vert = valeur basse, Rouge = valeur élevée.
+    `cell_ancre` est la cellule de départ (ex. "A15"), la légende occupe 3 lignes.
+    """
+    from openpyxl.utils.cell import coordinate_to_tuple
+    r0, c0 = coordinate_to_tuple(cell_ancre)  # (ligne, colonne)
+    # Titre
+    titre = ws.cell(row=r0, column=c0, value="Légende couleurs :")
+    titre.font = FONT_BOLD
+    # 3 paliers : vert (bas), jaune (moyen), rouge (élevé)
+    paliers = [
+        (_couleur_degrade(0.0), "Consommation basse"),
+        (_couleur_degrade(0.5), "Consommation moyenne"),
+        (_couleur_degrade(1.0), "Consommation élevée"),
+    ]
+    for i, (hexc, libelle) in enumerate(paliers):
+        rr = r0 + 1 + i
+        case_couleur = ws.cell(row=rr, column=c0)
+        case_couleur.fill = PatternFill("solid", fgColor=hexc)
+        case_couleur.border = BORDER_ALL
+        ws.cell(row=rr, column=c0 + 1, value=libelle)
+
+
 def ecrire_classeur(modele, jira, sortie_path, cfg):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
@@ -331,6 +366,8 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     # Dégradé vert->rouge sur la colonne Total Consommé (N)
     if codes_tries:
         _appliquer_degrade(ws_feat, "N", 2, 1 + len(codes_tries))
+    # Légende des couleurs du dégradé (à droite du tableau, colonne P)
+    _ajouter_legende_degrade(ws_feat, "P2")
 
     # --- Onglets collaborateurs ---
     for nom, data in collab.items():
@@ -343,10 +380,17 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         # Rôle en R1 (colonne 18)
         ws.cell(row=1, column=17, value="Rôle :").font = FONT_BOLD
         ws.cell(row=1, column=18, value=data["role"])
-        # Dégradé vert->rouge sur la colonne Total (P) — UNIQUEMENT les lignes détail
+        # Dégradé vert->rouge sur la colonne Total (P) — UNIQUEMENT les lignes détail.
+        # On exclut les lignes dont le Projet est exactement "Indispo DOSI ACCORDS"
+        # (indisponibilité, pas une vraie consommation à comparer au reste).
         n_detail = len(data["rows"])
         if n_detail >= 1:
-            _appliquer_degrade(ws, "P", 2, 1 + n_detail)
+            lignes_indispo = {
+                2 + i for i, r in enumerate(data["rows"])
+                if str(r[0]).strip() == "Indispo DOSI ACCORDS"
+            }
+            _appliquer_degrade(ws, "P", 2, 1 + n_detail,
+                               lignes_exclues=lignes_indispo)
 
         # Ligne TOTAL globale calculée (somme des lignes détail), pour affichage
         # uniquement : elle n'alimente NI les cumuls NI le dégradé.
@@ -363,6 +407,9 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
                 c.font = FONT_BOLD
             for col in range(1, 17):          # fond gris clair sur A..P
                 ws.cell(row=row_total, column=col).fill = FILL_TOTAL
+
+        # Légende des couleurs du dégradé (colonne R, sous le "Rôle")
+        _ajouter_legende_degrade(ws, "R3")
 
     # --- Stats ---
     ws_stats = wb.create_sheet("Stats")
@@ -483,7 +530,7 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         lien.hyperlink = "#'Stats'!A1"
         lien.font = FONT_LIEN
 
-        # Tableau 1 : par profil
+        # Tableau 1 : par profil (affiché en entier, y compris les profils à 0)
         ws.cell(row=4, column=1, value="Profil / Rôle")
         ws.cell(row=4, column=2, value="Consommation (Jours)")
         profils = [("PO / SM", s["po_sm"]), ("BA", s["ba"]),
@@ -500,16 +547,28 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         ws.cell(row=9, column=2).fill = FILL_TOTAL
         _bordures(ws, 4, 1, 9, 2)
 
-        # Camembert 1 : par profil
-        pie1 = PieChart()
-        pie1.title = "Répartition par Profil"
-        pie1.height, pie1.width = 6, 11
-        data = Reference(ws, min_col=2, min_row=5, max_row=8)
-        cats = Reference(ws, min_col=1, min_row=5, max_row=8)
-        pie1.add_data(data, titles_from_data=False)
-        pie1.set_categories(cats)
-        pie1.dataLabels = _labels_cat_pourcentage()
-        ws.add_chart(pie1, "E4")
+        # Camembert 1 : par profil — sur les profils NON NULS uniquement.
+        # On écrit les parts > 0 dans une zone source dédiée (colonnes V/W,
+        # à l'écart) pour que le camembert n'affiche ni tranche ni "0%".
+        profils_non_nuls = [(lab, val) for lab, val in profils if val > 0]
+        if profils_non_nuls:
+            COL_LAB, COL_VAL = 22, 23   # V et W
+            for i, (lab, val) in enumerate(profils_non_nuls):
+                ws.cell(row=5 + i, column=COL_LAB, value=lab)
+                ws.cell(row=5 + i, column=COL_VAL, value=round(val, 3))
+            r_fin = 5 + len(profils_non_nuls) - 1
+            pie1 = PieChart()
+            pie1.title = "Répartition par Profil"
+            pie1.height, pie1.width = 6, 11
+            data = Reference(ws, min_col=COL_VAL, min_row=5, max_row=r_fin)
+            cats = Reference(ws, min_col=COL_LAB, min_row=5, max_row=r_fin)
+            pie1.add_data(data, titles_from_data=False)
+            pie1.set_categories(cats)
+            pie1.dataLabels = _labels_cat_pourcentage()
+            ws.add_chart(pie1, "E4")
+            # Colonnes techniques (source du camembert) masquées : usage interne
+            ws.column_dimensions[get_column_letter(COL_LAB)].hidden = True
+            ws.column_dimensions[get_column_letter(COL_VAL)].hidden = True
 
         # Tableau 2 : par collaborateur
         ws.cell(row=12, column=1, value="Collaborateur")
