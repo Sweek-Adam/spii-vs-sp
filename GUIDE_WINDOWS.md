@@ -6,7 +6,39 @@ seulement la configuration à adapter.
 
 ---
 
-## 1. Installer Python en version portable (WinPython, sans droits admin)
+## 1. Récupérer le projet depuis GitHub
+
+Deux méthodes selon que Git est installé ou non sur ta machine.
+
+### Méthode A — avec Git (`git clone`)
+
+Si Git est disponible (teste avec `git --version` dans un terminal), ouvre un
+terminal dans le dossier où tu veux mettre le projet, puis :
+
+```
+git clone https://github.com/Sweek-Adam/spii-vs-sp.git
+cd spii-vs-sp
+```
+
+Tu obtiens un dossier `spii-vs-sp` contenant tout le projet, et tu pourras
+récupérer les futures mises à jour avec un simple `git pull`.
+
+### Méthode B — sans Git (téléchargement ZIP)
+
+Si Git n'est pas installé (fréquent sans droits admin) :
+
+1. Va sur la page du dépôt : https://github.com/Sweek-Adam/spii-vs-sp
+2. Clique sur le bouton vert **« Code »** → **« Download ZIP »**.
+3. Décompresse le ZIP où tu veux (clic droit → « Extraire tout »).
+4. Tu obtiens un dossier contenant le projet (le nom peut finir par `-main`).
+
+> Différence : avec le ZIP, tu auras le projet mais pas le lien Git. Pour
+> récupérer une future mise à jour, il faudra re-télécharger le ZIP. Avec
+> `git clone`, un `git pull` suffit.
+
+---
+
+## 2. Installer Python en version portable (WinPython, sans droits admin)
 
 Comme tu n'as pas les droits administrateur, on utilise **WinPython** : une
 distribution Python **portable** qui se décompresse dans un simple dossier,
@@ -50,7 +82,7 @@ pip.
 
 ---
 
-## 2. Pas d'environnement virtuel à créer
+## 3. Pas d'environnement virtuel à créer
 
 Avec WinPython, **tu n'as pas besoin de créer un environnement virtuel** : la
 distribution portable est déjà un environnement Python isolé et autonome. Tout
@@ -62,7 +94,7 @@ précédente) pour toutes les commandes qui suivent.
 
 ---
 
-## 3. Installer les dépendances
+## 4. Installer les dépendances
 
 Ouvre le **« WinPython Command Prompt.exe »** et tape :
 
@@ -79,7 +111,7 @@ a déjà le lecteur TOML intégré.
 
 ---
 
-## 4. Préparer les fichiers de configuration
+## 5. Préparer les fichiers de configuration
 
 Dans le même dossier que `spii_v2.py`, tu dois avoir :
 
@@ -110,7 +142,7 @@ api_token = "colle_ton_token_ici"
 
 ---
 
-## 5. Lancer le script
+## 6. Lancer le script
 
 Dans le **« WinPython Command Prompt.exe »**, place-toi dans le dossier qui
 contient `spii_v2.py` (avec la commande `cd`), puis lance :
@@ -135,7 +167,7 @@ Aucun fichier existant n'est modifié.
 
 ---
 
-## 6. En cas de souci
+## 7. En cas de souci
 
 - **`python n'est pas reconnu`** → tu n'utilises pas le « WinPython Command
   Prompt ». Ouvre bien `WinPython Command Prompt.exe` depuis le dossier
@@ -145,7 +177,7 @@ Aucun fichier existant n'est modifié.
   « Copier en tant que chemin d'accès » te donne le chemin exact.
 - **`Token Jira manquant`** → renseigne `api_token` dans secrets.toml.
 - **Erreur de module (`No module named ...`)** → la dépendance n'est pas
-  installée dans CE WinPython (refais l'étape 3 depuis le WinPython Command
+  installée dans CE WinPython (refais l'étape 4 depuis le WinPython Command
   Prompt).
 - **Comportements bizarres / chemins longs** → si tu as décompressé WinPython
   dans un dossier très profond, déplace-le vers un chemin court (ex. `C:\WPy`).
