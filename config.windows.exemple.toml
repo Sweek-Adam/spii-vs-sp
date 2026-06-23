@@ -1,0 +1,44 @@
+# =====================================================================
+# Configuration SPII vs SP — EXEMPLE (à adapter)
+# =====================================================================
+# Renomme ce fichier en "config.toml" et adapte les valeurs.
+# Le vrai config.toml n'est PAS versionné (voir .gitignore).
+#
+# ⚠ CHEMINS WINDOWS — IMPORTANT :
+#   En TOML, l'antislash "\" est un caractère spécial dans les chaînes
+#   normales (entre guillemets doubles "). Deux options sûres :
+#
+#   Option 1 (recommandée) — guillemets SIMPLES ' ' : antislash littéral.
+#       excel = 'C:\Users\TonNom\Documents\SPII vs SP.xlsx'
+#
+#   Option 2 — guillemets DOUBLES " " : doubler chaque antislash.
+#       excel = "C:\\Users\\TonNom\\Documents\\SPII vs SP.xlsx"
+#
+#   (Les slashs / fonctionnent aussi partout :
+#       excel = "C:/Users/TonNom/Documents/SPII vs SP.xlsx")
+# =====================================================================
+
+[jira]
+email    = "prenom.nom@exemple.com"
+url      = "https://votre-instance.atlassian.net"
+sp_field = "customfield_XXXXX"     # ton champ Story Points
+projet   = "PROJET"                # préfixe global du JQL : key ~ "PROJET-"
+
+[chemins]
+# Adapte ces deux chemins à ton arborescence.
+# Guillemets SIMPLES = pas besoin de doubler les antislashs.
+excel = 'C:\Users\TonNom\Documents\SPII vs SP.xlsx'
+csv   = 'C:\Users\TonNom\Documents\export.csv'
+
+# Équipe : "Nom complet de la ressource" = "Rôle"
+# Le nom doit correspondre EXACTEMENT à la colonne Ressource du CSV.
+# Rôles attendus par le script : PO, SM, BA, DEV, QA
+[ressources]
+"Nom Prenom1" = "PO"
+"Nom Prenom2" = "SM"
+"Nom Prenom3" = "DEV"
+"Nom Prenom4" = "DEV"
+"Nom Prenom5" = "BA"
+"Nom Prenom6" = "QA"
+"Nom Prenom7" = "QA"
+"Nom Prenom8" = "DEV"

@@ -1,0 +1,38 @@
+# =====================================================================
+# .gitignore — projet SPII vs SP
+# =====================================================================
+
+# --- SECRETS : ne JAMAIS committer (token Jira) ---
+secrets.toml
+
+# --- Config locale (chemins machine, email) : on ne versionne que l'exemple ---
+config.toml
+# (config.windows.exemple.toml EST versionné, lui : c'est le modèle)
+
+# --- Données source : ne pas versionner ---
+*.csv
+*.xlsm
+*.xlsx
+# (inclut aussi les fichiers générés _V2.xlsx)
+
+# --- Environnements Python ---
+.venv/
+venv/
+# Dossier WinPython si jamais il est dans le repo
+WPy*/
+WinPython*/
+
+# --- Caches et artefacts Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# --- Fichiers temporaires Excel (verrous d'ouverture) ---
+~$*.xlsx
+~$*.xlsm
+
+# --- OS ---
+.DS_Store
+Thumbs.db
