@@ -204,7 +204,7 @@ def recuperer_jira(tcre_list, cfg):
                 titre = r.json().get("fields", {}).get("summary", "Sans titre")
         except Exception as e:
             print(f"   Erreur titre {tcre} : {e}")
-        jql = f'issue in linkedIssues("{tcre}") AND key ~ "{projet}-"'
+        jql = f'issue in linkedIssues("{tcre}") AND PROJECT = "{projet}"'
         total_sp = 0.0
         try:
             r = session.get(f"{url_base}/rest/api/3/search/jql",

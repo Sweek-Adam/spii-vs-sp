@@ -47,24 +47,36 @@ pip.
 
 ### Télécharger
 
-1. Va sur la page officielle : https://winpython.github.io/
-   (ou les téléchargements : https://github.com/winpython/winpython/releases)
-2. Prends la dernière version, en **64 bits**, variante **"dot"** (la plus
-   légère : Python seul, suffisant pour ce script). Le fichier ressemble à
-   `Winpython64-3.13.x.0dot.exe`.
+1. **Lien direct (recommandé)** — télécharge l'exécutable testé pour ce projet,
+   **WinPython64-3.14.5.0dot** (Python 3.14.5, 64 bits, ~17 Mo) :
+   https://github.com/winpython/winpython/releases/download/17.4.20260511final/WinPython64-3.14.5.0dot.exe
+
+   Si ce lien ne fonctionne plus (nouvelle version publiée entre-temps), passe
+   par la page officielle : https://winpython.github.io/ ou la liste des
+   releases https://github.com/winpython/winpython/releases — et prends une
+   version **stable** en **64 bits**, variante **"dot"** (la plus légère).
+
+   > ⚠ **N'installe PAS la toute dernière version de Python** (ni une version
+   > marquée `a`, `b` ou `rc` = alpha/beta/release candidate, ex. `3.15.0b1`).
+   > Les bibliothèques comme **pandas** et **numpy** ne publient leurs versions
+   > pré-compilées (« wheels ») qu'avec un délai. Sur une version Python trop
+   > récente, `pip install pandas` tente de **compiler** depuis les sources et
+   > échoue (il faudrait un compilateur C++ / Visual Studio que tu n'as pas).
+   > Reste une version mineure ou deux derrière la toute dernière : par exemple,
+   > si la dernière est 3.15, prends une 3.14 ou 3.13 stable.
 
 ### Décompresser
 
-3. Double-clique sur le fichier `.exe` téléchargé. **Ce n'est pas un
+2. Double-clique sur le fichier `.exe` téléchargé. **Ce n'est pas un
    installeur** : il décompresse simplement un dossier à l'emplacement que tu
    choisis. Aucun droit admin requis.
-4. ⚠ **Choisis un emplacement avec un chemin court** (moins de ~37 caractères).
+3. ⚠ **Choisis un emplacement avec un chemin court** (moins de ~37 caractères).
    Par exemple `C:\WPy` ou `C:\Outils\WPy` plutôt qu'un dossier profondément
    imbriqué — WinPython le recommande pour éviter des soucis.
 
 ### Repérer le « WinPython Command Prompt »
 
-5. Dans le dossier décompressé, tu trouveras un fichier nommé
+4. Dans le dossier décompressé, tu trouveras un fichier nommé
    **`WinPython Command Prompt.exe`**. C'est LUI qu'on utilisera pour lancer
    toutes les commandes : il ouvre un terminal où `python` et `pip` pointent
    automatiquement vers ce Python portable, sans rien configurer.
@@ -108,43 +120,73 @@ a déjà le lecteur TOML intégré.
 
 Dans le même dossier que `spii_v2.py`, tu dois avoir :
 
-- **config.toml** — équipe, chemins, projet Jira
+- **config.toml** — équipe, chemins, paramètres Jira
 - **secrets.toml** — ton token Jira (à NE PAS partager / versionner)
 
-Pour config.toml, pars de `config.toml.exemple` fourni :
-renomme-le en `config.toml` et adapte les chemins de la section
-`[chemins]` : `csv` (le fichier à lire) et `dossier_sortie` (où écrire).
+Pour config.toml, pars de `config.toml.exemple` fourni : renomme-le en
+`config.toml`, puis renseigne chaque champ **dans l'ordre du fichier**, comme
+détaillé ci-dessous.
 
-### ⚠ Chemins Windows dans le TOML
+> ⚠ **Chemins Windows** : l'antislash `\` est un caractère spécial en TOML.
+> Mets tous les chemins entre **guillemets simples** `'...'` — l'antislash est
+> alors pris littéralement, sans rien doubler. (Avec des guillemets doubles, il
+> faudrait écrire `\\` partout.)
 
-L'antislash `\` est un caractère spécial en TOML. Le plus simple : utilise des
-**guillemets simples**, l'antislash est alors pris tel quel :
+### Section `[jira]`
+
+- **`email`** — ton adresse de connexion Jira (celle de ton compte Atlassian).
+- **`url`** — l'adresse de ton instance Jira, ex. `https://imsa.atlassian.net`.
+- **`sp_field`** — l'identifiant du champ Story Points (de la forme
+  `customfield_XXXXX`). Si tu ne le connais pas, demande-le à ton admin Jira.
+- **`projet`** — le préfixe des tickets à comptabiliser (ex. `LIEVRE`), utilisé
+  pour filtrer les liens dans Jira.
+
+```toml
+[jira]
+email    = "prenom.nom@exemple.com"
+url      = "https://votre-instance.atlassian.net"
+sp_field = "customfield_XXXXX"
+projet   = "PROJET"
+```
+
+### Section `[chemins]`
+
+- **`csv`** — chemin complet du fichier export SPII à lire (il doit exister).
+- **`dossier_sortie`** — dossier où écrire le fichier généré (créé
+  automatiquement s'il n'existe pas). Le nom du fichier produit est
+  automatique et horodaté (ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`).
+- **`python_exe`** — chemin complet vers le `python.exe` de WinPython.
+  Sert **uniquement** au script de lancement `lancer.ps1` (voir chapitre 5).
+  Astuce : dans l'explorateur, Maj + clic droit sur `python.exe` →
+  « Copier en tant que chemin d'accès ».
 
 ```toml
 [chemins]
 csv            = 'C:\Users\TonNom\Documents\export.csv'
 dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
+python_exe     = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\python.exe'
 ```
 
-### Renseigner l'équipe (section `[ressources]`)
+### Section `[ressources]`
 
-Toujours dans config.toml, la section `[ressources]` liste les collaborateurs
-à suivre, avec leur rôle. **Deux points importants :**
+Cette section liste les collaborateurs à suivre, avec leur rôle. **Deux points
+importants :**
 
 - Le **nom de chaque collaborateur doit être identique au nom exact tel qu'il
-  apparaît dans l'export SPII** (le fichier CSV). La moindre différence
-  (accent, espace, ordre prénom/nom) fait que la personne ne sera pas reconnue
-  et sa consommation ignorée.
+  apparaît dans l'export SPII** (le fichier CSV). La moindre différence (accent,
+  espace, ordre prénom/nom) fait que la personne n'est pas reconnue et sa
+  consommation ignorée.
 - Indique le **rôle** de chacun, parmi : `PO`, `SM`, `BA`, `DEV`, `QA`.
 
 ```toml
 [ressources]
 "Nom Prenom1" = "PO"
-"Nom Prenom2" = "DEV"
-"Nom Prenom3" = "QA"
+"Nom Prenom2" = "SM"
+"Nom Prenom3" = "DEV"
+"Nom Prenom4" = "QA"
 ```
 
-### Créer ton token Jira (secrets.toml)
+### Fichier `secrets.toml` — ton token Jira
 
 Le script se connecte à Jira avec un **token d'API** (pas ton mot de passe).
 Pour le générer :
@@ -168,13 +210,9 @@ token :
 api_token = "colle_ton_token_ici"
 ```
 
-L'email et l'URL Jira, eux, se renseignent dans config.toml (section `[jira]`).
-
 ---
 
 ## 5. Lancer le script
-
-### Méthode simple — le script `lancer.ps1`
 
 Le projet fournit **`lancer.ps1`** : clic droit dessus → **« Exécuter avec
 PowerShell »**, et c'est parti. Il lit le chemin de Python depuis `config.toml`,
@@ -211,17 +249,6 @@ Réponds `O` (ou `Y`) si une confirmation est demandée. Ce réglage est durable
 `lancer.ps1` tout en bloquant les scripts non signés téléchargés d'Internet.
 Ensuite, tu peux lancer `lancer.ps1` autant de fois que tu veux.
 
-### Méthode manuelle — en ligne de commande
-
-Sinon, en ligne de commande, en appelant directement le python.exe de
-WinPython (remplace par ton chemin) :
-
-```
-& 'C:\...\WinPython\WPy64-31450\python\python.exe' spii_v2.py
-```
-
-### Dans les deux cas
-
 Le script :
 1. lit le CSV,
 2. interroge Jira en parallèle,
@@ -245,5 +272,9 @@ Aucun fichier existant n'est modifié. Le fichier généré s'ouvre automatiquem
 - **Erreur de module (`No module named ...`)** → la dépendance n'est pas
   installée dans CE WinPython (refais l'étape 3 depuis le WinPython Command
   Prompt).
+- **`pip install pandas` échoue** avec `Unknown compiler` / `vswhere.exe` /
+  `metadata-generation-failed` → ta version de Python est trop récente, pip
+  essaie de compiler faute de wheels. Reprends un WinPython en **Python 3.14
+  ou 3.13 stable** (voir l'avertissement au chapitre 2).
 - **Comportements bizarres / chemins longs** → si tu as décompressé WinPython
   dans un dossier très profond, déplace-le vers un chemin court (ex. `C:\WPy`).
