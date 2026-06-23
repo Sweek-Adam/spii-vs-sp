@@ -222,14 +222,16 @@ def recuperer_jira(tcre_list, cfg):
     def un_tcre(tcre):
         titre = "Titre introuvable"
         pi = ""
-        # Champs demandés au ticket : titre + Planning Interval (si configuré)
-        champs = "summary" + (f",{pi_field}" if pi_field else "")
+        statut = ""
+        # Champs demandés au ticket : titre + statut + Planning Interval (si configuré)
+        champs = "summary,status" + (f",{pi_field}" if pi_field else "")
         try:
             r = session.get(f"{url_base}/rest/api/3/issue/{tcre}",
                             params={"fields": champs}, timeout=30)
             if r.status_code == 200:
                 fields = r.json().get("fields", {})
                 titre = fields.get("summary", "Sans titre")
+                statut = (fields.get("status") or {}).get("name", "")
                 if pi_field:
                     pi = extraire_pi(fields.get(pi_field))
         except Exception as e:
@@ -245,7 +247,7 @@ def recuperer_jira(tcre_list, cfg):
                     total_sp += float(issue["fields"].get(sp_field) or 0)
         except Exception as e:
             print(f"   Erreur SP {tcre} : {e}")
-        return tcre, {"titre": titre, "sp": total_sp, "pi": pi}
+        return tcre, {"titre": titre, "sp": total_sp, "pi": pi, "statut": statut}
 
     with ThreadPoolExecutor(max_workers=8) as ex:
         return dict(ex.map(un_tcre, tcre_list))
@@ -384,18 +386,20 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     projet = cfg["jira"]["projet"]
     # --- Suivi_Features ---
     ws_feat = wb.create_sheet("Suivi_Features_" + projet)
-    ws_feat.append(["Code Feature", "Planning Interval"]
+    ws_feat.append(["Code Feature", "Planning Interval", "Statut"]
                    + ENTETES_MOIS + ["Total Consommé"])
     for code in codes_tries:
         mois = features[code]
-        pi = jira.get(code, {}).get("pi", "")
-        ws_feat.append([code, pi] + mois + [sum(mois)])
-    _style_entete(ws_feat, "A1:O1")
-    # Dégradé vert->rouge sur la colonne Total Consommé (O, décalée par la col PI)
+        info = jira.get(code, {})
+        pi = info.get("pi", "")
+        statut = info.get("statut", "")
+        ws_feat.append([code, pi, statut] + mois + [sum(mois)])
+    _style_entete(ws_feat, "A1:P1")
+    # Dégradé vert->rouge sur la colonne Total Consommé (P, décalée par PI+Statut)
     if codes_tries:
-        _appliquer_degrade(ws_feat, "O", 2, 1 + len(codes_tries))
-    # Légende des couleurs du dégradé (à droite du tableau, colonne Q)
-    _ajouter_legende_degrade(ws_feat, "Q2")
+        _appliquer_degrade(ws_feat, "P", 2, 1 + len(codes_tries))
+    # Légende des couleurs du dégradé (à droite du tableau, colonne R)
+    _ajouter_legende_degrade(ws_feat, "R2")
 
     # --- Onglets collaborateurs ---
     for nom, data in collab.items():
@@ -447,8 +451,8 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     ws_stats.append(["Feature", "Story points", "Total consommé",
                      "Ratio total consommé / story points",
                      "Conso PO / SM", "Conso BA", "Conso Dévs", "Conso QA",
-                     "Titre", "Planning Interval"])
-    _style_entete(ws_stats, "A1:J1")
+                     "Titre", "Planning Interval", "Statut"])
+    _style_entete(ws_stats, "A1:K1")
     r = 2
     # Lignes de données + collecte (sp, total) par feature pour la synthèse
     sp_total_par_feature = []  # [(sp, total), ...]
@@ -457,9 +461,10 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         sp = jira.get(code, {}).get("sp", 0.0)
         titre = jira.get(code, {}).get("titre", "")
         pi = jira.get(code, {}).get("pi", "")
+        statut = jira.get(code, {}).get("statut", "")
         ratio = (s["total"] / sp) if sp else 0.0
         ws_stats.append([code, sp, s["total"], ratio,
-                         s["po_sm"], s["ba"], s["dev"], s["qa"], titre, pi])
+                         s["po_sm"], s["ba"], s["dev"], s["qa"], titre, pi, statut])
         # Ratio (colonne D) : jusqu'à 3 décimales, mais un zéro s'affiche "0"
         # (et non "0,"). Format à 3 sections : positif ; négatif ; zéro.
         ws_stats.cell(row=r, column=4).number_format = "0.###;-0.###;0"
@@ -496,8 +501,8 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     # uniquement (on exclut les lignes TOTAL et MOYENNE en dessous).
     if derniere >= 2:
         _appliquer_degrade(ws_stats, "C", 2, derniere)
-    # Légende des couleurs (à droite, colonne K)
-    _ajouter_legende_degrade(ws_stats, "K2")
+    # Légende des couleurs (à droite, colonne M — K/L occupées par Statut/données)
+    _ajouter_legende_degrade(ws_stats, "M2")
 
     # --- Tableau de synthèse : moyenne jours réels par complexité (SP) ---
     start_recap = derniere + 5
