@@ -40,7 +40,31 @@ Si Git n'est pas installé (fréquent sans droits admin) :
 
 ## Voie rapide : le script d'initialisation
 
-Une fois le projet récupéré, le plus simple est de lancer le script
+**Étape préalable (une seule fois) : autoriser l'exécution des scripts.**
+Avant le tout premier lancement, Windows bloque par défaut l'exécution des
+scripts PowerShell. Voici comment l'autoriser pour ton compte (sans droits
+admin) :
+
+1. Ouvre le menu **Démarrer**, tape **PowerShell**.
+2. Clique sur **Windows PowerShell** pour l'ouvrir (un terminal bleu s'ouvre).
+3. Copie-colle cette commande, puis appuie sur **Entrée** :
+
+   ```
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+   ```
+
+4. Si une confirmation est demandée, tape **O** (ou **Y**) puis **Entrée**.
+
+Ce réglage est durable : tu n'auras à le faire qu'une seule fois sur ton poste.
+Il autorise les scripts locaux (comme `initialiser.ps1`) tout en continuant de
+bloquer les scripts non signés téléchargés d'Internet.
+
+> Le script `initialiser.ps1` tente lui aussi de faire ce réglage, mais selon
+> ta configuration il se peut qu'il ne puisse pas se lancer du tout tant que la
+> commande ci-dessus n'a pas été passée — d'où cette étape préalable.
+
+**Lancer l'initialisation.**
+Une fois cela fait, le plus simple est de lancer le script
 **`initialiser.ps1`** (clic droit → **« Exécuter avec PowerShell »**). Il
 automatise presque tout le reste de ce guide :
 
