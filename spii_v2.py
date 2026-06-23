@@ -460,8 +460,9 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         ratio = (s["total"] / sp) if sp else 0.0
         ws_stats.append([code, sp, s["total"], ratio,
                          s["po_sm"], s["ba"], s["dev"], s["qa"], titre, pi])
-        # Ratio (colonne D) : 3 décimales maximum
-        ws_stats.cell(row=r, column=4).number_format = "0.###"
+        # Ratio (colonne D) : jusqu'à 3 décimales, mais un zéro s'affiche "0"
+        # (et non "0,"). Format à 3 sections : positif ; négatif ; zéro.
+        ws_stats.cell(row=r, column=4).number_format = "0.###;-0.###;0"
         # Lien interne vers l'onglet TCRE, seulement s'il existe (conso > 0)
         if code in codes_avec_onglet:
             cell = ws_stats.cell(row=r, column=1)
