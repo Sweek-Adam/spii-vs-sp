@@ -459,6 +459,13 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     for c in range(1, 9):
         ws_stats.cell(row=avg_row, column=c).fill = PatternFill("solid", fgColor="E1EBF5")
 
+    # Dégradé vert->rouge sur la colonne Total consommé (C), lignes de données
+    # uniquement (on exclut les lignes TOTAL et MOYENNE en dessous).
+    if derniere >= 2:
+        _appliquer_degrade(ws_stats, "C", 2, derniere)
+    # Légende des couleurs (à droite, colonne K)
+    _ajouter_legende_degrade(ws_stats, "K2")
+
     # --- Tableau de synthèse : moyenne jours réels par complexité (SP) ---
     start_recap = derniere + 5
     ws_stats.cell(row=start_recap, column=1, value="Complexité (SP)")
