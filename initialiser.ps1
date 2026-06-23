@@ -1,22 +1,22 @@
 # =====================================================================
-# initialiser.ps1 — Assistant d'installation du projet SPII vs SP
+# initialiser.ps1 - Assistant d'installation du projet SPII vs SP
 # ---------------------------------------------------------------------
-# Ce script prépare automatiquement ce qui peut l'être :
-#   1. Vérifie / télécharge WinPython (Python portable, sans admin)
-#   2. Détecte le python.exe et le renseigne dans config.toml
-#   3. Installe les dépendances Python (pandas, openpyxl, requests, truststore)
-#   4. Crée config.toml et secrets.toml à partir des modèles .exemple
-#   5. Autorise l'exécution des scripts PowerShell (ExecutionPolicy)
-#   6. Affiche un récapitulatif et les étapes manuelles restantes
+# Ce script prepare automatiquement ce qui peut l'etre :
+#   1. Verifie / telecharge WinPython (Python portable, sans admin)
+#   2. Detecte le python.exe et le renseigne dans config.toml
+#   3. Installe les dependances Python (pandas, openpyxl, requests, truststore)
+#   4. Cree config.toml et secrets.toml a partir des modeles .exemple
+#   5. Autorise l'execution des scripts PowerShell (ExecutionPolicy)
+#   6. Affiche un recapitulatif et les etapes manuelles restantes
 #
-# UTILISATION : clic droit -> "Exécuter avec PowerShell"
+# UTILISATION : clic droit -> "Executer avec PowerShell"
 #               (ou .\initialiser.ps1 dans un terminal)
 # =====================================================================
 
 # Toujours travailler dans le dossier de ce script
 Set-Location -Path $PSScriptRoot
 
-# Version de WinPython à télécharger si absent (stable, avec wheels dispo)
+# Version de WinPython a telecharger si absent (stable, avec wheels dispo)
 $WP_URL  = "https://github.com/winpython/winpython/releases/download/17.4.20260511final/WinPython64-3.14.5.0dot.exe"
 $WP_EXE  = "WinPython64-3.14.5.0dot.exe"
 $WP_DIR  = Join-Path $PSScriptRoot "WinPython"
@@ -31,7 +31,7 @@ function Erreur($t)  { Write-Host "  [X]  $t" -ForegroundColor Red }
 # --- Fonctions du questionnaire interactif ---
 
 function Demander($libelle, $defaut = "") {
-    # Pose une question ; si l'utilisateur laisse vide, renvoie le défaut.
+    # Pose une question ; si l'utilisateur laisse vide, renvoie le defaut.
     if ($defaut) {
         $rep = Read-Host "  $libelle [$defaut]"
         if ([string]::IsNullOrWhiteSpace($rep)) { return $defaut }
@@ -42,15 +42,15 @@ function Demander($libelle, $defaut = "") {
 }
 
 function Echapper-Toml($v) {
-    # En TOML guillemets simples, l'apostrophe ne peut pas être échappée :
+    # En TOML guillemets simples, l'apostrophe ne peut pas etre echappee :
     # on la remplace par un accent (rare dans les chemins/emails, mais prudent).
-    return ($v -replace "'", "’")
+    return ($v -replace "'", [char]0x2019)
 }
 
 function Construire-Config($jira, $chemins, $ressources) {
-    # Reconstruit un config.toml complet et commenté à partir des réponses.
+    # Reconstruit un config.toml complet a partir des reponses.
     $sb = [System.Text.StringBuilder]::new()
-    [void]$sb.AppendLine("# Configuration SPII vs SP — genere par initialiser.ps1")
+    [void]$sb.AppendLine("# Configuration SPII vs SP - genere par initialiser.ps1")
     [void]$sb.AppendLine("# Chemins Windows en guillemets SIMPLES ' ' (antislash litteral).")
     [void]$sb.AppendLine("")
     [void]$sb.AppendLine("[jira]")
@@ -65,12 +65,12 @@ function Construire-Config($jira, $chemins, $ressources) {
     [void]$sb.AppendLine("dossier_sortie = '$(Echapper-Toml $chemins.dossier_sortie)'")
     [void]$sb.AppendLine("python_exe     = '$(Echapper-Toml $chemins.python_exe)'")
     [void]$sb.AppendLine("")
-    [void]$sb.AppendLine("# Equipe : ""Nom complet"" = ""Role"" (PO, SM, BA, DEV, QA)")
+    [void]$sb.AppendLine("# Equipe : Nom complet = Role (PO, SM, BA, DEV, QA)")
     [void]$sb.AppendLine("# Le nom doit correspondre EXACTEMENT a la colonne Ressource du CSV.")
     [void]$sb.AppendLine("[ressources]")
     foreach ($p in $ressources) {
         $nom = $p.nom -replace '"', "'"
-        [void]$sb.AppendLine("""$nom"" = ""$($p.role)""")
+        [void]$sb.AppendLine(('"{0}" = "{1}"' -f $nom, $p.role))
     }
     return $sb.ToString()
 }
@@ -95,7 +95,7 @@ function Questionnaire-Config {
     $chemins = @{
         csv            = (Demander "Chemin du CSV a lire") -replace '"', ''
         dossier_sortie = (Demander "Dossier de sortie") -replace '"', ''
-        python_exe     = ""   # rempli plus loin par la detection WinPython
+        python_exe     = ""
     }
 
     Write-Host ""
@@ -106,12 +106,12 @@ function Questionnaire-Config {
     while ($true) {
         $nom = Demander "Nom complet (EXACTEMENT comme dans le CSV)"
         if ([string]::IsNullOrWhiteSpace($nom)) { break }
-        $role = (Demander "  -> Role de $nom (PO/SM/BA/DEV/QA)").ToUpper()
+        $role = (Demander ("  -> Role de {0} (PO/SM/BA/DEV/QA)" -f $nom)).ToUpper()
         $ressources += @{ nom = $nom; role = $role }
-        OK "Ajoute : $nom = $role"
+        OK ("Ajoute : {0} = {1}" -f $nom, $role)
     }
     if ($ressources.Count -eq 0) {
-        Warn "Aucune ressource saisie — tu pourras les ajouter dans config.toml."
+        Warn "Aucune ressource saisie - tu pourras les ajouter dans config.toml."
     }
 
     return @{ jira = $jira; chemins = $chemins; ressources = $ressources }
@@ -125,7 +125,7 @@ Write-Host "#  Initialisation du projet SPII vs SP        #" -ForegroundColor Cy
 Write-Host "###############################################"
 
 # ---------------------------------------------------------------------
-# 0. Autoriser l'exécution des scripts PowerShell (pour ce compte)
+# 0. Autoriser l'execution des scripts PowerShell (pour ce compte)
 # ---------------------------------------------------------------------
 Titre "Autorisation des scripts PowerShell"
 try {
@@ -142,13 +142,12 @@ try {
 }
 
 # ---------------------------------------------------------------------
-# 1. WinPython : présent ? sinon, le télécharger
+# 1. WinPython : present ? sinon, le telecharger
 # ---------------------------------------------------------------------
 Titre "Python portable (WinPython)"
 
 function Trouver-PythonExe {
-    # Cherche un python.exe sous un dossier WinPython/WPy du projet,
-    # en privilégiant celui à la racine du dossier "python".
+    # Cherche un python.exe sous un dossier WinPython/WPy du projet.
     $candidats = Get-ChildItem -Path $PSScriptRoot -Recurse -Filter "python.exe" -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -like "*WinPython*" -or $_.FullName -like "*WPy*" }
     if (-not $candidats) { return $null }
@@ -169,15 +168,12 @@ if ($python) {
         try {
             $dest = Join-Path $PSScriptRoot $WP_EXE
             Info "Telechargement en cours (~17 Mo)..."
-            # TLS 1.2 pour les connexions GitHub
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             Invoke-WebRequest -Uri $WP_URL -OutFile $dest -UseBasicParsing
             OK "Telecharge : $WP_EXE"
             Info "Decompression dans $WP_DIR ..."
             New-Item -ItemType Directory -Force -Path $WP_DIR | Out-Null
-            # Les .exe WinPython récents sont des installeurs Inno Setup
-            # (/VERYSILENT /DIR=...). Les anciens étaient des archives 7-Zip
-            # (-o<dossier> -y). On tente Inno d'abord, puis 7-Zip en repli.
+            # Installeurs recents = Inno Setup (/VERYSILENT /DIR=). Anciens = 7-Zip (-o -y).
             try {
                 & $dest "/VERYSILENT" "/DIR=$WP_DIR" | Out-Null
                 Start-Sleep -Seconds 3
@@ -189,7 +185,7 @@ if ($python) {
             if ($python) {
                 OK "WinPython installe"
                 Info $python
-                Remove-Item $dest -ErrorAction SilentlyContinue  # nettoyer l'exe
+                Remove-Item $dest -ErrorAction SilentlyContinue
             } else {
                 Erreur "Decompression faite mais python.exe introuvable."
                 Warn "Lance l'exe telecharge a la main pour l'extraire dans $WP_DIR,"
@@ -209,11 +205,10 @@ if ($python) {
 }
 
 # ---------------------------------------------------------------------
-# 2. Fichiers de configuration (questionnaire interactif ou copie modèle)
+# 2. Fichiers de configuration (questionnaire interactif ou copie modele)
 # ---------------------------------------------------------------------
 Titre "Fichiers de configuration"
 
-# Réponses du questionnaire (si utilisé) — servira pour python_exe plus loin.
 $reponses = $null
 
 function Copier-Exemple($exemple, $cible) {
@@ -228,7 +223,7 @@ function Copier-Exemple($exemple, $cible) {
     }
 }
 
-# Proposer le questionnaire (sauf si config.toml existe déjà)
+# Proposer le questionnaire (sauf si config.toml existe deja)
 $faire_questionnaire = $false
 if (Test-Path "config.toml") {
     OK "config.toml existe deja"
@@ -242,12 +237,10 @@ if (Test-Path "config.toml") {
 if ($faire_questionnaire) {
     $reponses = Questionnaire-Config
 
-    # Écriture de config.toml (python_exe sera complété à l'étape 3)
     $contenu = Construire-Config $reponses.jira $reponses.chemins $reponses.ressources
     Set-Content "config.toml" $contenu -Encoding UTF8
     OK "config.toml genere"
 
-    # secrets.toml : on demande le token
     Write-Host ""
     Write-Host "  -- Token Jira (secrets.toml) --" -ForegroundColor White
     Info "Generer un token : https://id.atlassian.com/manage-profile/security/api-tokens"
@@ -256,24 +249,23 @@ if ($faire_questionnaire) {
         $token = "REMPLACE_PAR_TON_TOKEN"
         $etapes_manuelles += "Mettre ton token Jira dans secrets.toml"
     }
-    $sec = "[jira]`napi_token = ""$($token -replace '"','')""`n"
+    $token = $token -replace '"', ''
+    $sec = "[jira]`napi_token = ""$token""`n"
     Set-Content "secrets.toml" $sec -Encoding UTF8
     OK "secrets.toml genere"
 } else {
-    Info "Questionnaire ignore — copie des modeles a la place."
+    Info "Questionnaire ignore - copie des modeles a la place."
     Copier-Exemple "config.toml.exemple"  "config.toml"
     Copier-Exemple "secrets.toml.exemple" "secrets.toml"
 }
 
 # ---------------------------------------------------------------------
-# 3. Renseigner python_exe dans config.toml (si trouvé et pas déjà mis)
+# 3. Renseigner python_exe dans config.toml (si trouve)
 # ---------------------------------------------------------------------
 if ($python -and (Test-Path "config.toml")) {
     Titre "Configuration du chemin Python"
     $contenu = Get-Content "config.toml" -Raw
     if ($contenu -match "(?m)^\s*python_exe\s*=") {
-        # Ligne python_exe présente (vide ou non) -> on la (re)renseigne.
-        # On échappe les éventuels '$' du chemin pour le -replace.
         $val = $python -replace '\$', '$$$$'
         $nouveau = $contenu -replace "(?m)^\s*python_exe\s*=.*", "python_exe     = '$val'"
         Set-Content "config.toml" $nouveau -NoNewline
@@ -287,7 +279,7 @@ if ($python -and (Test-Path "config.toml")) {
 }
 
 # ---------------------------------------------------------------------
-# 4. Installer les dépendances Python
+# 4. Installer les dependances Python
 # ---------------------------------------------------------------------
 if ($python) {
     Titre "Installation des dependances Python"
@@ -298,7 +290,7 @@ if ($python) {
             OK "Dependances installees"
         } else {
             Warn "pip s'est termine avec un avertissement (code $LASTEXITCODE)"
-            $etapes_manuelles += "Verifier l'installation : $python -m pip install pandas openpyxl requests truststore"
+            $etapes_manuelles += "Verifier : $python -m pip install pandas openpyxl requests truststore"
         }
     } catch {
         Erreur "Echec pip : $($_.Exception.Message)"
@@ -309,7 +301,7 @@ if ($python) {
 }
 
 # ---------------------------------------------------------------------
-# 5. Récapitulatif
+# 5. Recapitulatif
 # ---------------------------------------------------------------------
 Titre "Recapitulatif"
 
@@ -329,8 +321,8 @@ if ($etapes_manuelles.Count -gt 0) {
         $n++
     }
     Write-Host ""
-    Write-Host "  Notamment : ouvre config.toml et secrets.toml pour y mettre" -ForegroundColor Yellow
-    Write-Host "  tes chemins (CSV, dossier de sortie), tes infos Jira et ton token." -ForegroundColor Yellow
+    Write-Host "  Pense a verifier config.toml et secrets.toml (chemins, infos" -ForegroundColor Yellow
+    Write-Host "  Jira, token) avant de lancer." -ForegroundColor Yellow
 } else {
     Write-Host ""
     OK "Tout est pret ! Tu peux lancer le projet avec : .\lancer.ps1"
