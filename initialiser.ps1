@@ -82,7 +82,7 @@ function Questionnaire-Config {
 
     Write-Host "  -- Jira --" -ForegroundColor White
     $jira = @{
-        email    = Demander "Email Jira (ex. prenom.nom@decathlon.com)"
+        email    = Demander "Email Jira (ex. nom.prenom@imsa.msa.fr)"
         url      = Demander "URL Jira (ex. https://xxx.atlassian.net)"
         sp_field = Demander "Champ Story Points" "customfield_10024"
         pi_field = Demander "Champ Planning Interval" "customfield_11400"
