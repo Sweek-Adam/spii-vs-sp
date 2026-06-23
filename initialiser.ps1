@@ -47,6 +47,14 @@ function Echapper-Toml($v) {
     return ($v -replace "'", [char]0x2019)
 }
 
+function Ecrire-SansBOM($chemin, $contenu) {
+    # Ecrit un fichier en UTF-8 SANS BOM. Le BOM (3 octets invisibles ajoutes
+    # par Set-Content -Encoding UTF8 sous Windows PowerShell) fait echouer la
+    # lecture TOML cote Python ("Invalid statement" en ligne 1).
+    $utf8SansBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($chemin, $contenu, $utf8SansBom)
+}
+
 function Construire-Config($jira, $chemins, $ressources) {
     # Reconstruit un config.toml complet a partir des reponses.
     $sb = [System.Text.StringBuilder]::new()
@@ -82,7 +90,7 @@ function Questionnaire-Config {
 
     Write-Host "  -- Jira --" -ForegroundColor White
     $jira = @{
-        email    = Demander "Email Jira (ex. nom.prenom@imsa.msa.fr)"
+        email    = Demander "Email Jira (ex. prenom.nom@decathlon.com)"
         url      = Demander "URL Jira (ex. https://xxx.atlassian.net)"
         sp_field = Demander "Champ Story Points" "customfield_10024"
         pi_field = Demander "Champ Planning Interval" "customfield_11400"
@@ -238,7 +246,7 @@ if ($faire_questionnaire) {
     $reponses = Questionnaire-Config
 
     $contenu = Construire-Config $reponses.jira $reponses.chemins $reponses.ressources
-    Set-Content "config.toml" $contenu -Encoding UTF8
+    Ecrire-SansBOM (Join-Path $PSScriptRoot "config.toml") $contenu
     OK "config.toml genere"
 
     Write-Host ""
@@ -251,7 +259,7 @@ if ($faire_questionnaire) {
     }
     $token = $token -replace '"', ''
     $sec = "[jira]`napi_token = ""$token""`n"
-    Set-Content "secrets.toml" $sec -Encoding UTF8
+    Ecrire-SansBOM (Join-Path $PSScriptRoot "secrets.toml") $sec
     OK "secrets.toml genere"
 } else {
     Info "Questionnaire ignore - copie des modeles a la place."
@@ -264,11 +272,12 @@ if ($faire_questionnaire) {
 # ---------------------------------------------------------------------
 if ($python -and (Test-Path "config.toml")) {
     Titre "Configuration du chemin Python"
-    $contenu = Get-Content "config.toml" -Raw
+    $cfgPath = Join-Path $PSScriptRoot "config.toml"
+    $contenu = Get-Content $cfgPath -Raw
     if ($contenu -match "(?m)^\s*python_exe\s*=") {
         $val = $python -replace '\$', '$$$$'
         $nouveau = $contenu -replace "(?m)^\s*python_exe\s*=.*", "python_exe     = '$val'"
-        Set-Content "config.toml" $nouveau -NoNewline
+        Ecrire-SansBOM $cfgPath $nouveau
         OK "python_exe renseigne dans config.toml"
         Info "  -> $python"
     } else {

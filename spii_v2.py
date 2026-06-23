@@ -72,16 +72,24 @@ _thin        = Side(style="thin")
 BORDER_ALL   = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
 
 
+def _lire_toml(chemin):
+    """Lit un fichier TOML en tolérant un éventuel BOM en tête de fichier.
+    Certains éditeurs / PowerShell écrivent un BOM UTF-8 que tomllib refuse
+    (erreur 'Invalid statement' en ligne 1). 'utf-8-sig' le retire au besoin.
+    """
+    with open(chemin, "r", encoding="utf-8-sig") as f:
+        return tomllib.loads(f.read())
+
+
 def charger_config():
     if not os.path.exists(CONFIG_PATH):
         raise FileNotFoundError(f"Config introuvable : {CONFIG_PATH}")
     if not os.path.exists(SECRETS_PATH):
         raise FileNotFoundError(f"Secrets introuvable : {SECRETS_PATH}")
-    with open(CONFIG_PATH, "rb") as f:
-        cfg = tomllib.load(f)
-    with open(SECRETS_PATH, "rb") as f:
-        cfg.setdefault("jira", {})["api_token"] = \
-            tomllib.load(f).get("jira", {}).get("api_token", "")
+    cfg = _lire_toml(CONFIG_PATH)
+    secrets = _lire_toml(SECRETS_PATH)
+    cfg.setdefault("jira", {})["api_token"] = \
+        secrets.get("jira", {}).get("api_token", "")
     return cfg
 
 
