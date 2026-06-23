@@ -80,33 +80,6 @@ pip.
 > Astuce : tu peux placer le dossier WinPython où tu veux — disque local,
 > lecteur réseau, voire clé USB. Tout reste contenu dedans.
 
-### (Optionnel mais pratique) Ajouter WinPython au PATH
-
-Par défaut, `python` ne fonctionne que dans le « WinPython Command Prompt ». Si
-tu veux pouvoir taper `python` dans **n'importe quel** terminal (PowerShell, cmd)
-— pratique notamment pour lancer le script via un raccourci — tu peux ajouter
-WinPython au PATH de ton compte utilisateur. **Sans droits admin.**
-
-Le projet fournit un script qui fait ça pour toi : **`ajouter-winpython-au-path.ps1`**
-
-1. Clic droit sur `ajouter-winpython-au-path.ps1` → **« Exécuter avec PowerShell »**.
-2. Quand c'est demandé, colle le chemin de ton dossier WinPython (ex. `C:\WPy64-31360`).
-3. Le script détecte automatiquement le bon sous-dossier Python et l'ajoute à
-   ton PATH utilisateur.
-4. **Ferme puis rouvre tes terminaux** pour que le changement prenne effet.
-5. Teste dans un terminal normal : `python --version` doit répondre.
-
-> Si PowerShell refuse d'exécuter le script (« exécution de scripts désactivée »),
-> ouvre PowerShell et lance d'abord cette commande (sans admin, pour ta session
-> uniquement) :
-> ```
-> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-> ```
-> puis relance le script.
-
-Une fois le PATH configuré, tu n'es plus obligée de passer par le « WinPython
-Command Prompt » — un terminal classique suffit pour les étapes suivantes.
-
 ---
 
 ## 3. Pas d'environnement virtuel à créer
@@ -195,6 +168,14 @@ python_exe = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\
 > Si le champ est vide ou le chemin faux, `lancer.ps1` s'arrête avec un message
 > t'indiquant quoi corriger.
 
+> ⚠ Si PowerShell refuse d'exécuter le script (« exécution de scripts
+> désactivée »), ouvre PowerShell et lance d'abord cette commande (sans admin,
+> valable pour la session en cours uniquement) :
+> ```
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
+> puis relance `lancer.ps1`.
+
 ### Méthode manuelle — en ligne de commande
 
 Sinon, en ligne de commande, en appelant directement le python.exe de
@@ -203,9 +184,6 @@ WinPython (remplace par ton chemin) :
 ```
 & 'C:\...\WinPython\WPy64-31450\python\python.exe' spii_v2.py
 ```
-
-(ou simplement `python spii_v2.py` si tu as ajouté WinPython au PATH — voir la
-section optionnelle 2.)
 
 ### Dans les deux cas
 
