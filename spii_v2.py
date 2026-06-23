@@ -33,6 +33,17 @@ import pandas as pd
 import requests
 from requests.auth import HTTPBasicAuth
 
+# En entreprise, un proxy d'inspection SSL peut intercepter HTTPS avec son
+# propre certificat. truststore fait utiliser à Python le magasin de
+# certificats du système (Windows/macOS), qui fait déjà confiance à ce proxy.
+# Optionnel : si le paquet n'est pas installé, on continue sans (ex. réseau
+# domestique où la vérification standard suffit).
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side
 from openpyxl.chart import PieChart, ScatterChart, Reference, Series

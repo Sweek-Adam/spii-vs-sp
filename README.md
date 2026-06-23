@@ -12,6 +12,8 @@ multiplateforme Mac/Windows).
 
 - Python 3.11+ (ou 3.10 avec le paquet `tomli`)
 - Dépendances : `pip install pandas openpyxl requests`
+- Sur réseau d'entreprise avec proxy SSL : ajouter `truststore`
+  (`pip install truststore`) pour que Python utilise les certificats du système
 
 ## Configuration (avant le premier lancement)
 

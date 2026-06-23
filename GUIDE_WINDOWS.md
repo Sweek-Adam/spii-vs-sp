@@ -99,12 +99,17 @@ précédente) pour toutes les commandes qui suivent.
 Ouvre le **« WinPython Command Prompt.exe »** et tape :
 
 ```
-pip install pandas openpyxl requests
+pip install pandas openpyxl requests truststore
 ```
 
 Note : WinPython récent embarque souvent déjà pandas et openpyxl (c'est une
 distribution orientée science des données). Dans ce cas pip te dira simplement
 « Requirement already satisfied » — c'est normal, rien à faire de plus.
+
+Le paquet **`truststore`** est important sur le réseau d'entreprise : il permet
+à Python d'utiliser les certificats de Windows pour se connecter à Jira à
+travers le proxy de sécurité (sinon les appels Jira échouent avec une erreur
+de certificat SSL).
 
 Tu n'as **pas** besoin d'installer `tomli` : WinPython est en Python 3.13, qui
 a déjà le lecteur TOML intégré.
