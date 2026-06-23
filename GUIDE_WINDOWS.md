@@ -64,9 +64,24 @@ bloquer les scripts non signés téléchargés d'Internet.
 > commande ci-dessus n'a pas été passée — d'où cette étape préalable.
 
 **Lancer l'initialisation.**
-Une fois cela fait, le plus simple est de lancer le script
-**`initialiser.ps1`** (clic droit → **« Exécuter avec PowerShell »**). Il
-automatise presque tout le reste de ce guide :
+Une fois l'autorisation faite, lance le script **`initialiser.ps1`** :
+
+1. Ouvre le dossier du projet dans l'explorateur Windows.
+2. Repère le fichier **`initialiser.ps1`**.
+3. **Clic droit** dessus → **« Exécuter avec PowerShell »**.
+   - Si tu ne vois pas cette option directement, clique sur **« Afficher plus
+     d'options »** (Windows 11) pour faire apparaître le menu complet.
+4. Une fenêtre PowerShell s'ouvre et le script démarre. **Laisse-la ouverte** :
+   il va te poser des questions au fil de l'eau (voir plus bas).
+
+**Pendant l'exécution**, le script est interactif : il affiche son avancement
+en couleurs (`[OK]` en vert, `[!]` en jaune pour un avertissement) et te pose
+quelques questions — par exemple s'il faut télécharger WinPython, ou pour
+remplir la configuration (voir le détail ci-dessous). Réponds simplement à
+chaque invite. À la toute fin, il affiche un **récapitulatif** et garde la
+fenêtre ouverte (tu fermes avec **Entrée**).
+
+Concrètement, le script automatise presque tout le reste de ce guide :
 
 - télécharge WinPython s'il est absent (Python portable, sans admin) ;
 - installe les dépendances Python ;
@@ -78,8 +93,8 @@ automatise presque tout le reste de ce guide :
 - affiche un récapitulatif et la liste de ce qu'il te reste à faire à la main.
 
 À la fin, il te restera essentiellement à **remplir `config.toml` et
-`secrets.toml`** avec tes vraies valeurs (chemins, infos Jira, token) — voir la
-section 4.3 pour le détail de chaque champ.
+`secrets.toml`** avec tes vraies valeurs (chemins, infos Jira, token) si tu n'as
+pas utilisé le questionnaire — voir la section 4.3 pour le détail de chaque champ.
 
 > Si le script ne peut pas tout faire (par ex. téléchargement bloqué par le
 > proxy d'entreprise), il te le dit clairement et les chapitres ci-dessous
