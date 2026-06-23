@@ -29,23 +29,44 @@ if (-not (Test-Path $wpRoot)) {
     exit 1
 }
 
-# 2. Trouver automatiquement le sous-dossier Python (python-3.x.x.amd64)
-#    et son sous-dossier Scripts (pip, etc.)
-$pythonDir = Get-ChildItem -Path $wpRoot -Directory |
-    Where-Object { $_.Name -like "python-*" } |
-    Select-Object -First 1
+# 2. Trouver automatiquement le sous-dossier Python et le dossier Scripts.
+#    Selon la version de WinPython, le dossier Python s'appelle :
+#      - "python"                (versions récentes, ~2024+)
+#      - "python-3.x.x.amd64"    (versions plus anciennes)
+#    Et le dossier des scripts (pip) est soit "scripts" à la racine,
+#    soit "Scripts" dans le dossier python.
+$pythonDir = $null
+
+# a) Version récente : dossier nommé exactement "python"
+$candidat = Join-Path $wpRoot "python"
+if (Test-Path (Join-Path $candidat "python.exe")) {
+    $pythonDir = Get-Item $candidat
+}
+
+# b) Sinon, ancienne convention : "python-*"
+if (-not $pythonDir) {
+    $pythonDir = Get-ChildItem -Path $wpRoot -Directory |
+        Where-Object { $_.Name -like "python-*" } |
+        Select-Object -First 1
+}
 
 if (-not $pythonDir) {
-    Write-Host "X Aucun sous-dossier 'python-*' trouve dans $wpRoot" -ForegroundColor Red
-    Write-Host "  Es-tu sur que c'est bien le dossier racine de WinPython ?"
+    Write-Host "X Aucun dossier Python trouve dans $wpRoot" -ForegroundColor Red
+    Write-Host "  (ni 'python', ni 'python-*'). Es-tu sur du dossier racine WinPython ?"
     exit 1
 }
 
-$pythonPath  = $pythonDir.FullName
-$scriptsPath = Join-Path $pythonPath "Scripts"
+$pythonPath = $pythonDir.FullName
+
+# Dossier Scripts : essayer "scripts" à la racine WinPython, puis "Scripts"
+# dans le dossier python.
+$scriptsPath = $null
+foreach ($cand in @((Join-Path $wpRoot "scripts"), (Join-Path $pythonPath "Scripts"))) {
+    if (Test-Path $cand) { $scriptsPath = $cand; break }
+}
 
 Write-Host "Python detecte : $pythonPath" -ForegroundColor Green
-if (Test-Path $scriptsPath) {
+if ($scriptsPath) {
     Write-Host "Scripts (pip)  : $scriptsPath" -ForegroundColor Green
 }
 
@@ -54,8 +75,11 @@ $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($null -eq $currentPath) { $currentPath = "" }
 
 # 4. Construire la liste des chemins a ajouter (en evitant les doublons)
+$cheminsCibles = @($pythonPath)
+if ($scriptsPath) { $cheminsCibles += $scriptsPath }
+
 $aAjouter = @()
-foreach ($p in @($pythonPath, $scriptsPath)) {
+foreach ($p in $cheminsCibles) {
     if ((Test-Path $p) -and ($currentPath -notlike "*$p*")) {
         $aAjouter += $p
     }
