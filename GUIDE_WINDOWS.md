@@ -38,12 +38,39 @@ Si Git n'est pas installé (fréquent sans droits admin) :
 
 ---
 
+## Voie rapide : le script d'initialisation
+
+Une fois le projet récupéré, le plus simple est de lancer le script
+**`initialiser.ps1`** (clic droit → **« Exécuter avec PowerShell »**). Il
+automatise presque tout le reste de ce guide :
+
+- télécharge WinPython s'il est absent (Python portable, sans admin) ;
+- installe les dépendances Python ;
+- crée `config.toml` et `secrets.toml` à partir des modèles ;
+- renseigne le chemin Python dans `config.toml` ;
+- règle l'autorisation d'exécution des scripts PowerShell ;
+- affiche un récapitulatif et la liste de ce qu'il te reste à faire à la main.
+
+À la fin, il te restera essentiellement à **remplir `config.toml` et
+`secrets.toml`** avec tes vraies valeurs (chemins, infos Jira, token) — voir le
+chapitre 4 pour le détail de chaque champ.
+
+> Si le script ne peut pas tout faire (par ex. téléchargement bloqué par le
+> proxy d'entreprise), il te le dit clairement et les chapitres ci-dessous
+> détaillent la procédure manuelle correspondante.
+
+---
+
 ## 2. Installer Python en version portable (WinPython, sans droits admin)
 
 Comme tu n'as pas les droits administrateur, on utilise **WinPython** : une
 distribution Python **portable** qui se décompresse dans un simple dossier,
 sans installation système, sans toucher au PATH, sans admin. Elle inclut déjà
 pip.
+
+> Si tu as utilisé `initialiser.ps1` (voie rapide ci-dessus), WinPython est
+> déjà installé — tu peux sauter directement au chapitre 4 pour remplir tes
+> fichiers de configuration.
 
 ### Télécharger
 
