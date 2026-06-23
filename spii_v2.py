@@ -459,9 +459,11 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     ws_stats.append(["Feature", "Story points", "Total consommé",
                      "Ratio total consommé / story points",
                      "Conso PO / SM", "Conso BA", "Conso Dévs", "Conso QA",
-                     "Titre", "Planning Interval", "Statut"])
-    _style_entete(ws_stats, "A1:K1")
+                     "Titre", "Planning Interval", "Statut", "Lien Jira"])
+    _style_entete(ws_stats, "A1:L1")
     r = 2
+    # URL de base Jira (pour les liens cliquables vers chaque feature)
+    url_base_jira = str(cfg["jira"].get("url", "")).rstrip("/")
     # Lignes de données + collecte (sp, total) par feature pour la synthèse
     sp_total_par_feature = []  # [(sp, total), ...]
     for code in codes_tries:
@@ -481,6 +483,11 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
             cell = ws_stats.cell(row=r, column=1)
             cell.hyperlink = f"#'{code}'!A1"
             cell.font = FONT_LIEN
+        # Lien cliquable vers la page Jira de la feature (colonne L)
+        if url_base_jira:
+            cell_jira = ws_stats.cell(row=r, column=12, value="Ouvrir ↗")
+            cell_jira.hyperlink = f"{url_base_jira}/browse/{code}"
+            cell_jira.font = FONT_LIEN
         sp_total_par_feature.append((sp, s["total"]))
         r += 1
     derniere = r - 1
@@ -587,6 +594,13 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         lien = ws.cell(row=3, column=1, value="← Retour vers Stats")
         lien.hyperlink = "#'Stats'!A1"
         lien.font = FONT_LIEN
+
+        # Lien vers la page Jira du TCRE (ligne 3, colonne B, à droite du retour)
+        url_base = str(cfg["jira"].get("url", "")).rstrip("/")
+        if url_base:
+            lien_jira = ws.cell(row=3, column=2, value="Ouvrir dans Jira ↗")
+            lien_jira.hyperlink = f"{url_base}/browse/{code}"
+            lien_jira.font = FONT_LIEN
 
         # Tableau 1 : par profil (affiché en entier, y compris les profils à 0)
         ws.cell(row=4, column=1, value="Profil / Rôle")
