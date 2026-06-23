@@ -80,6 +80,33 @@ pip.
 > Astuce : tu peux placer le dossier WinPython où tu veux — disque local,
 > lecteur réseau, voire clé USB. Tout reste contenu dedans.
 
+### (Optionnel mais pratique) Ajouter WinPython au PATH
+
+Par défaut, `python` ne fonctionne que dans le « WinPython Command Prompt ». Si
+tu veux pouvoir taper `python` dans **n'importe quel** terminal (PowerShell, cmd)
+— pratique notamment pour lancer le script via un raccourci — tu peux ajouter
+WinPython au PATH de ton compte utilisateur. **Sans droits admin.**
+
+Le projet fournit un script qui fait ça pour toi : **`ajouter-winpython-au-path.ps1`**
+
+1. Clic droit sur `ajouter-winpython-au-path.ps1` → **« Exécuter avec PowerShell »**.
+2. Quand c'est demandé, colle le chemin de ton dossier WinPython (ex. `C:\WPy64-31360`).
+3. Le script détecte automatiquement le bon sous-dossier Python et l'ajoute à
+   ton PATH utilisateur.
+4. **Ferme puis rouvre tes terminaux** pour que le changement prenne effet.
+5. Teste dans un terminal normal : `python --version` doit répondre.
+
+> Si PowerShell refuse d'exécuter le script (« exécution de scripts désactivée »),
+> ouvre PowerShell et lance d'abord cette commande (sans admin, pour ta session
+> uniquement) :
+> ```
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
+> puis relance le script.
+
+Une fois le PATH configuré, tu n'es plus obligée de passer par le « WinPython
+Command Prompt » — un terminal classique suffit pour les étapes suivantes.
+
 ---
 
 ## 3. Pas d'environnement virtuel à créer
@@ -144,13 +171,30 @@ api_token = "colle_ton_token_ici"
 
 ## 6. Lancer le script
 
-Dans le **« WinPython Command Prompt.exe »**, place-toi dans le dossier qui
-contient `spii_v2.py` (avec la commande `cd`), puis lance :
+### Méthode simple — le script `lancer.ps1`
+
+Le projet fournit **`lancer.ps1`** : clic droit dessus → **« Exécuter avec
+PowerShell »**, et c'est parti. Il se place tout seul dans le bon dossier,
+lance la génération, et garde la fenêtre ouverte à la fin pour que tu lises les
+messages.
+
+> Si tu n'as PAS ajouté WinPython au PATH (section 2), ouvre `lancer.ps1` avec
+> un éditeur de texte et renseigne le chemin complet vers le `python.exe` de
+> WinPython dans la variable `$python` (une ligne d'exemple est déjà prête à
+> décommenter).
+
+### Méthode manuelle — en ligne de commande
+
+Sinon, dans un terminal (le « WinPython Command Prompt », ou n'importe quel
+terminal si WinPython est dans ton PATH), place-toi dans le dossier du projet
+et lance :
 
 ```
 cd C:\chemin\vers\ton\projet
 python spii_v2.py
 ```
+
+### Dans les deux cas
 
 Le script :
 1. lit le CSV,
@@ -158,12 +202,8 @@ Le script :
 3. génère un fichier horodaté (ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`) dans le
    dossier de sortie indiqué en config (créé s'il n'existe pas).
 
-Aucun fichier existant n'est modifié.
-
-> Astuce confort : tu peux créer un petit fichier `lancer.bat` à côté du script
-> contenant une seule ligne — le chemin complet vers le python de WinPython
-> suivi de spii_v2.py — pour tout lancer d'un double-clic. Demande-le moi si tu
-> veux que je te le prépare.
+Aucun fichier existant n'est modifié. Le fichier généré s'ouvre automatiquement
+à la fin.
 
 ---
 
