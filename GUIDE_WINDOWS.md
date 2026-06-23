@@ -70,7 +70,9 @@ automatise presque tout le reste de ce guide :
 
 - télécharge WinPython s'il est absent (Python portable, sans admin) ;
 - installe les dépendances Python ;
-- crée `config.toml` et `secrets.toml` à partir des modèles ;
+- **propose un questionnaire** pour remplir `config.toml` et `secrets.toml`
+  (infos Jira, chemins, équipe membre par membre, token) — tu peux le passer
+  et éditer les fichiers à la main si tu préfères ;
 - renseigne le chemin Python dans `config.toml` ;
 - règle l'autorisation d'exécution des scripts PowerShell ;
 - affiche un récapitulatif et la liste de ce qu'il te reste à faire à la main.

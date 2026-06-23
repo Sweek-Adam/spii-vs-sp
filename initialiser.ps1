@@ -28,6 +28,95 @@ function Info($t)    { Write-Host "  [i]  $t" -ForegroundColor Gray }
 function Warn($t)    { Write-Host "  [!]  $t" -ForegroundColor Yellow }
 function Erreur($t)  { Write-Host "  [X]  $t" -ForegroundColor Red }
 
+# --- Fonctions du questionnaire interactif ---
+
+function Demander($libelle, $defaut = "") {
+    # Pose une question ; si l'utilisateur laisse vide, renvoie le défaut.
+    if ($defaut) {
+        $rep = Read-Host "  $libelle [$defaut]"
+        if ([string]::IsNullOrWhiteSpace($rep)) { return $defaut }
+        return $rep.Trim()
+    }
+    $rep = Read-Host "  $libelle"
+    return $rep.Trim()
+}
+
+function Echapper-Toml($v) {
+    # En TOML guillemets simples, l'apostrophe ne peut pas être échappée :
+    # on la remplace par un accent (rare dans les chemins/emails, mais prudent).
+    return ($v -replace "'", "’")
+}
+
+function Construire-Config($jira, $chemins, $ressources) {
+    # Reconstruit un config.toml complet et commenté à partir des réponses.
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine("# Configuration SPII vs SP — genere par initialiser.ps1")
+    [void]$sb.AppendLine("# Chemins Windows en guillemets SIMPLES ' ' (antislash litteral).")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("[jira]")
+    [void]$sb.AppendLine("email    = '$(Echapper-Toml $jira.email)'")
+    [void]$sb.AppendLine("url      = '$(Echapper-Toml $jira.url)'")
+    [void]$sb.AppendLine("sp_field = '$(Echapper-Toml $jira.sp_field)'")
+    [void]$sb.AppendLine("pi_field = '$(Echapper-Toml $jira.pi_field)'")
+    [void]$sb.AppendLine("projet   = '$(Echapper-Toml $jira.projet)'")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("[chemins]")
+    [void]$sb.AppendLine("csv            = '$(Echapper-Toml $chemins.csv)'")
+    [void]$sb.AppendLine("dossier_sortie = '$(Echapper-Toml $chemins.dossier_sortie)'")
+    [void]$sb.AppendLine("python_exe     = '$(Echapper-Toml $chemins.python_exe)'")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("# Equipe : ""Nom complet"" = ""Role"" (PO, SM, BA, DEV, QA)")
+    [void]$sb.AppendLine("# Le nom doit correspondre EXACTEMENT a la colonne Ressource du CSV.")
+    [void]$sb.AppendLine("[ressources]")
+    foreach ($p in $ressources) {
+        $nom = $p.nom -replace '"', "'"
+        [void]$sb.AppendLine("""$nom"" = ""$($p.role)""")
+    }
+    return $sb.ToString()
+}
+
+function Questionnaire-Config {
+    Titre "Questionnaire : config.toml"
+    Info "Laisse vide pour garder la valeur entre [crochets] quand proposee."
+    Write-Host ""
+
+    Write-Host "  -- Jira --" -ForegroundColor White
+    $jira = @{
+        email    = Demander "Email Jira (ex. prenom.nom@decathlon.com)"
+        url      = Demander "URL Jira (ex. https://xxx.atlassian.net)"
+        sp_field = Demander "Champ Story Points" "customfield_10024"
+        pi_field = Demander "Champ Planning Interval" "customfield_11400"
+        projet   = Demander "Cle projet (ex. LIEVRE)"
+    }
+
+    Write-Host ""
+    Write-Host "  -- Chemins --" -ForegroundColor White
+    Info "Astuce : Maj + clic droit sur un fichier -> 'Copier en tant que chemin'."
+    $chemins = @{
+        csv            = (Demander "Chemin du CSV a lire") -replace '"', ''
+        dossier_sortie = (Demander "Dossier de sortie") -replace '"', ''
+        python_exe     = ""   # rempli plus loin par la detection WinPython
+    }
+
+    Write-Host ""
+    Write-Host "  -- Equipe (ressources) --" -ForegroundColor White
+    Info "Saisis chaque membre. Laisse le NOM vide pour terminer la liste."
+    Info "Roles attendus : PO, SM, BA, DEV, QA."
+    $ressources = @()
+    while ($true) {
+        $nom = Demander "Nom complet (EXACTEMENT comme dans le CSV)"
+        if ([string]::IsNullOrWhiteSpace($nom)) { break }
+        $role = (Demander "  -> Role de $nom (PO/SM/BA/DEV/QA)").ToUpper()
+        $ressources += @{ nom = $nom; role = $role }
+        OK "Ajoute : $nom = $role"
+    }
+    if ($ressources.Count -eq 0) {
+        Warn "Aucune ressource saisie — tu pourras les ajouter dans config.toml."
+    }
+
+    return @{ jira = $jira; chemins = $chemins; ressources = $ressources }
+}
+
 $etapes_manuelles = @()
 
 Write-Host ""
@@ -120,9 +209,12 @@ if ($python) {
 }
 
 # ---------------------------------------------------------------------
-# 2. Fichiers de configuration (copie depuis les .exemple)
+# 2. Fichiers de configuration (questionnaire interactif ou copie modèle)
 # ---------------------------------------------------------------------
 Titre "Fichiers de configuration"
+
+# Réponses du questionnaire (si utilisé) — servira pour python_exe plus loin.
+$reponses = $null
 
 function Copier-Exemple($exemple, $cible) {
     if (Test-Path $cible) {
@@ -136,8 +228,42 @@ function Copier-Exemple($exemple, $cible) {
     }
 }
 
-Copier-Exemple "config.toml.exemple"  "config.toml"
-Copier-Exemple "secrets.toml.exemple" "secrets.toml"
+# Proposer le questionnaire (sauf si config.toml existe déjà)
+$faire_questionnaire = $false
+if (Test-Path "config.toml") {
+    OK "config.toml existe deja"
+    $r = Read-Host "  Le RECREER via le questionnaire ? (efface l'actuel) (O/N)"
+    if ($r -match '^[OoYy]') { $faire_questionnaire = $true }
+} else {
+    $r = Read-Host "  Remplir la config maintenant via un questionnaire ? (O/N)"
+    if ($r -match '^[OoYy]') { $faire_questionnaire = $true }
+}
+
+if ($faire_questionnaire) {
+    $reponses = Questionnaire-Config
+
+    # Écriture de config.toml (python_exe sera complété à l'étape 3)
+    $contenu = Construire-Config $reponses.jira $reponses.chemins $reponses.ressources
+    Set-Content "config.toml" $contenu -Encoding UTF8
+    OK "config.toml genere"
+
+    # secrets.toml : on demande le token
+    Write-Host ""
+    Write-Host "  -- Token Jira (secrets.toml) --" -ForegroundColor White
+    Info "Generer un token : https://id.atlassian.com/manage-profile/security/api-tokens"
+    $token = Demander "Colle ton token Jira (laisse vide pour le mettre plus tard)"
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        $token = "REMPLACE_PAR_TON_TOKEN"
+        $etapes_manuelles += "Mettre ton token Jira dans secrets.toml"
+    }
+    $sec = "[jira]`napi_token = ""$($token -replace '"','')""`n"
+    Set-Content "secrets.toml" $sec -Encoding UTF8
+    OK "secrets.toml genere"
+} else {
+    Info "Questionnaire ignore — copie des modeles a la place."
+    Copier-Exemple "config.toml.exemple"  "config.toml"
+    Copier-Exemple "secrets.toml.exemple" "secrets.toml"
+}
 
 # ---------------------------------------------------------------------
 # 3. Renseigner python_exe dans config.toml (si trouvé et pas déjà mis)
