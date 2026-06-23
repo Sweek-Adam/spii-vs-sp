@@ -149,7 +149,7 @@ def construire_modele(csv_path, dict_param):
         role = dict_param[ressource_maj].upper()
 
         livrable = str(row["Livrable"]) if pd.notna(row["Livrable"]) else ""
-        match = re.search(r"TCRE-\d{3,}", livrable, re.IGNORECASE)
+        match = re.search(r"TCRE-\d{1,}", livrable, re.IGNORECASE)
         valeurs = [conv_num(row[c]) for c in MOIS_COLS]
         total_ligne = sum(valeurs)
 
@@ -204,7 +204,7 @@ def recuperer_jira(tcre_list, cfg):
                 titre = r.json().get("fields", {}).get("summary", "Sans titre")
         except Exception as e:
             print(f"   Erreur titre {tcre} : {e}")
-        jql = f'issue in linkedIssues("{tcre}") AND PROJECT = "{projet}"'
+        jql = f'parent in ("{tcre}") AND PROJECT = "{projet}"'
         total_sp = 0.0
         try:
             r = session.get(f"{url_base}/rest/api/3/search/jql",
@@ -299,7 +299,7 @@ def _ajuster_colonnes(ws, largeur_min=8, largeur_max=45):
         ws.column_dimensions[col].width = largeur
 
 
-def ecrire_classeur(modele, jira, sortie_path):
+def ecrire_classeur(modele, jira, sortie_path,cfg):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
 
@@ -319,10 +319,10 @@ def ecrire_classeur(modele, jira, sortie_path):
     # Style de lien interne (bleu souligné, comme un hyperlien classique)
     FONT_LIEN = Font(name="Arial", color="0563C1", underline="single")
 
-    # (Onglet Paramètres supprimé : la source des rôles est config.toml)
 
+    projet = cfg["jira"]["projet"]
     # --- Suivi_Features ---
-    ws_feat = wb.create_sheet("Suivi_Features")
+    ws_feat = wb.create_sheet("Suivi_Features_" + projet)
     ws_feat.append(["Code Feature"] + ENTETES_MOIS + ["Total Consommé"])
     for code in codes_tries:
         mois = features[code]
@@ -622,7 +622,7 @@ def main():
 
     print(f"Écriture du classeur openpyxl -> {os.path.basename(sortie)}...")
     chrono("Écriture openpyxl",
-           lambda: ecrire_classeur(modele, jira, sortie))
+           lambda: ecrire_classeur(modele, jira, sortie,cfg))
 
     print(f"\n✅ Terminé : {sortie}")
 
