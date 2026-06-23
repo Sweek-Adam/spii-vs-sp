@@ -22,6 +22,7 @@
 email    = "prenom.nom@exemple.com"
 url      = "https://votre-instance.atlassian.net"
 sp_field = "customfield_10024"     # ton champ Story Points
+pi_field = "customfield_11400".    # ton champ Planning Interval
 projet   = "PROJET"                # préfixe global du JQL : key ~ "PROJET-"
 
 [chemins]
@@ -34,7 +35,7 @@ csv            = 'C:\Users\TonNom\Documents\y25VUE9.csv'
 dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
 # Chemin de l'exécutable Python — utilisé UNIQUEMENT par lancer.ps1 (Windows).
 # Sur Mac/Linux, laisse vide. Sur Windows avec WinPython, pointe le python.exe :
-python_exe     = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\python.exe'
+python_exe     = 'C:\Users\TonNom\WinPython\WPy64-31450\python\python.exe'
 
 # Équipe : "Nom complet de la ressource" = "Rôle"
 # Le nom doit correspondre EXACTEMENT à la colonne Ressource du CSV.

@@ -197,17 +197,43 @@ def recuperer_jira(tcre_list, cfg):
     session.auth = auth
     url_base = cfg["jira"]["url"]
     sp_field = cfg["jira"]["sp_field"]
+    pi_field = cfg["jira"].get("pi_field", "")  # Planning Interval (optionnel)
     projet = cfg["jira"]["projet"]
+
+    def extraire_pi(brut):
+        """Le Planning Interval peut être une liste de valeurs. On gère :
+        liste d'objets [{'value': 'PI 1'}, ...], liste de chaînes, objet seul
+        {'value': 'PI 1'}, ou chaîne simple. Renvoie les valeurs jointes par '; '.
+        """
+        if brut is None:
+            return ""
+        if isinstance(brut, list):
+            vals = []
+            for el in brut:
+                if isinstance(el, dict):
+                    vals.append(str(el.get("value") or el.get("name") or "").strip())
+                else:
+                    vals.append(str(el).strip())
+            return "; ".join(v for v in vals if v)
+        if isinstance(brut, dict):
+            return str(brut.get("value") or brut.get("name") or "").strip()
+        return str(brut).strip()
 
     def un_tcre(tcre):
         titre = "Titre introuvable"
+        pi = ""
+        # Champs demandés au ticket : titre + Planning Interval (si configuré)
+        champs = "summary" + (f",{pi_field}" if pi_field else "")
         try:
             r = session.get(f"{url_base}/rest/api/3/issue/{tcre}",
-                            params={"fields": "summary"}, timeout=30)
+                            params={"fields": champs}, timeout=30)
             if r.status_code == 200:
-                titre = r.json().get("fields", {}).get("summary", "Sans titre")
+                fields = r.json().get("fields", {})
+                titre = fields.get("summary", "Sans titre")
+                if pi_field:
+                    pi = extraire_pi(fields.get(pi_field))
         except Exception as e:
-            print(f"   Erreur titre {tcre} : {e}")
+            print(f"   Erreur titre/PI {tcre} : {e}")
         jql = f'parent in ("{tcre}") AND PROJECT = "{projet}"'
         total_sp = 0.0
         try:
@@ -219,7 +245,7 @@ def recuperer_jira(tcre_list, cfg):
                     total_sp += float(issue["fields"].get(sp_field) or 0)
         except Exception as e:
             print(f"   Erreur SP {tcre} : {e}")
-        return tcre, {"titre": titre, "sp": total_sp}
+        return tcre, {"titre": titre, "sp": total_sp, "pi": pi}
 
     with ThreadPoolExecutor(max_workers=8) as ex:
         return dict(ex.map(un_tcre, tcre_list))
@@ -358,66 +384,71 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     projet = cfg["jira"]["projet"]
     # --- Suivi_Features ---
     ws_feat = wb.create_sheet("Suivi_Features_" + projet)
-    ws_feat.append(["Code Feature"] + ENTETES_MOIS + ["Total Consommé"])
+    ws_feat.append(["Code Feature", "Planning Interval"]
+                   + ENTETES_MOIS + ["Total Consommé"])
     for code in codes_tries:
         mois = features[code]
-        ws_feat.append([code] + mois + [sum(mois)])
-    _style_entete(ws_feat, "A1:N1")
-    # Dégradé vert->rouge sur la colonne Total Consommé (N)
+        pi = jira.get(code, {}).get("pi", "")
+        ws_feat.append([code, pi] + mois + [sum(mois)])
+    _style_entete(ws_feat, "A1:O1")
+    # Dégradé vert->rouge sur la colonne Total Consommé (O, décalée par la col PI)
     if codes_tries:
-        _appliquer_degrade(ws_feat, "N", 2, 1 + len(codes_tries))
-    # Légende des couleurs du dégradé (à droite du tableau, colonne P)
-    _ajouter_legende_degrade(ws_feat, "P2")
+        _appliquer_degrade(ws_feat, "O", 2, 1 + len(codes_tries))
+    # Légende des couleurs du dégradé (à droite du tableau, colonne Q)
+    _ajouter_legende_degrade(ws_feat, "Q2")
 
     # --- Onglets collaborateurs ---
     for nom, data in collab.items():
         ws = wb.create_sheet(nom[:31])  # limite Excel : 31 car.
-        ws.append(["Projet", "Livrable d'origine", "Feature (Racine)"]
-                  + ENTETES_MOIS + ["Total"])
+        ws.append(["Projet", "Livrable d'origine", "Feature (Racine)",
+                   "Planning Interval"] + ENTETES_MOIS + ["Total"])
         for r in data["rows"]:
-            ws.append(r)
-        _style_entete(ws, "A1:P1")
-        # Rôle en R1 (colonne 18)
-        ws.cell(row=1, column=17, value="Rôle :").font = FONT_BOLD
-        ws.cell(row=1, column=18, value=data["role"])
-        # Dégradé vert->rouge sur la colonne Total (P) — UNIQUEMENT les lignes détail.
-        # On exclut les lignes dont le Projet est exactement "Indispo DOSI ACCORDS"
-        # (indisponibilité, pas une vraie consommation à comparer au reste).
+            # r = [Projet, Livrable, Feature, 12 mois, Total]
+            # On insère le Planning Interval (du TCRE) juste après la Feature.
+            code_feat = str(r[2]).upper()
+            pi = jira.get(code_feat, {}).get("pi", "")
+            ws.append(r[:3] + [pi] + r[3:])
+        _style_entete(ws, "A1:Q1")  # une colonne de plus (Q au lieu de P)
+        # Rôle en S1 (colonne 19, décalé de +1)
+        ws.cell(row=1, column=18, value="Rôle :").font = FONT_BOLD
+        ws.cell(row=1, column=19, value=data["role"])
+        # Dégradé vert->rouge sur la colonne Total (Q maintenant) — lignes détail.
+        # On exclut les lignes "Indispo DOSI ACCORDS".
         n_detail = len(data["rows"])
         if n_detail >= 1:
             lignes_indispo = {
                 2 + i for i, r in enumerate(data["rows"])
                 if str(r[0]).strip() == "Indispo DOSI ACCORDS"
             }
-            _appliquer_degrade(ws, "P", 2, 1 + n_detail,
+            _appliquer_degrade(ws, "Q", 2, 1 + n_detail,
                                lignes_exclues=lignes_indispo)
 
-        # Ligne TOTAL globale calculée (somme des lignes détail), pour affichage
-        # uniquement : elle n'alimente NI les cumuls NI le dégradé.
+        # Ligne TOTAL globale calculée (somme des lignes détail), affichage seul.
         if n_detail >= 1:
-            row_total = 2 + n_detail  # juste après la dernière ligne détail
-            # Somme colonne par colonne : 12 mois (D..O = idx 3..14) + Total (P = idx 15)
+            row_total = 2 + n_detail
+            # Somme colonne par colonne : 12 mois + Total (cols E..Q = idx 4..16)
             sommes = [0.0] * 13  # 12 mois + total
             for r in data["rows"]:
                 for j in range(13):           # r[3..15] = 12 mois + total
                     sommes[j] += conv_num(r[3 + j])
             ws.cell(row=row_total, column=1, value="TOTAL").font = FONT_BOLD
+            # Les valeurs commencent en colonne E (5) à cause de la col PI insérée
             for j, val in enumerate(sommes):
-                c = ws.cell(row=row_total, column=4 + j, value=round(val, 3))
+                c = ws.cell(row=row_total, column=5 + j, value=round(val, 3))
                 c.font = FONT_BOLD
-            for col in range(1, 17):          # fond gris clair sur A..P
+            for col in range(1, 18):          # fond gris clair sur A..Q
                 ws.cell(row=row_total, column=col).fill = FILL_TOTAL
 
-        # Légende des couleurs du dégradé (colonne R, sous le "Rôle")
-        _ajouter_legende_degrade(ws, "R3")
+        # Légende des couleurs du dégradé (colonne S, sous le "Rôle")
+        _ajouter_legende_degrade(ws, "S3")
 
     # --- Stats ---
     ws_stats = wb.create_sheet("Stats")
     ws_stats.append(["Feature", "Story points", "Total consommé",
                      "Ratio total consommé / story points",
                      "Conso PO / SM", "Conso BA", "Conso Dévs", "Conso QA",
-                     "Titre"])
-    _style_entete(ws_stats, "A1:I1")
+                     "Titre", "Planning Interval"])
+    _style_entete(ws_stats, "A1:J1")
     r = 2
     # Lignes de données + collecte (sp, total) par feature pour la synthèse
     sp_total_par_feature = []  # [(sp, total), ...]
@@ -425,9 +456,10 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         s = stats[code]
         sp = jira.get(code, {}).get("sp", 0.0)
         titre = jira.get(code, {}).get("titre", "")
+        pi = jira.get(code, {}).get("pi", "")
         ratio = (s["total"] / sp) if sp else 0.0
         ws_stats.append([code, sp, s["total"], ratio,
-                         s["po_sm"], s["ba"], s["dev"], s["qa"], titre])
+                         s["po_sm"], s["ba"], s["dev"], s["qa"], titre, pi])
         # Ratio (colonne D) : 3 décimales maximum
         ws_stats.cell(row=r, column=4).number_format = "0.###"
         # Lien interne vers l'onglet TCRE, seulement s'il existe (conso > 0)
@@ -532,8 +564,13 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         ws.cell(row=1, column=1, value=f"{code} - {titre}").font = FONT_TITRE
         ws.row_dimensions[1].height = 30
 
-        # Lien retour vers l'onglet Stats (ligne 2, colonne A)
-        lien = ws.cell(row=2, column=1, value="← Retour vers Stats")
+        # Planning Interval (ligne 2, entre le titre et le lien retour)
+        pi = jira.get(code, {}).get("pi", "")
+        ws.cell(row=2, column=1, value="Planning Interval :").font = FONT_BOLD
+        ws.cell(row=2, column=2, value=pi if pi else "—")
+
+        # Lien retour vers l'onglet Stats (ligne 3, colonne A)
+        lien = ws.cell(row=3, column=1, value="← Retour vers Stats")
         lien.hyperlink = "#'Stats'!A1"
         lien.font = FONT_LIEN
 
