@@ -18,8 +18,9 @@ import os
 import re
 import sys
 import time
+import subprocess
 import unicodedata
-from datetime import date
+from datetime import date, datetime
 from concurrent.futures import ThreadPoolExecutor
 
 # tomllib est natif depuis Python 3.11 ; sinon fallback sur le paquet 'tomli'
@@ -256,6 +257,37 @@ def _appliquer_degrade(ws, col_letter, row_min, row_max):
             ws[f"{col_letter}{row_min + i}"].fill = PatternFill("solid", fgColor=hexc)
 
 
+def _ajuster_colonnes(ws, largeur_min=8, largeur_max=45):
+    """Ajuste la largeur de chaque colonne au contenu le plus long.
+
+    openpyxl ne sait pas mesurer le rendu réel du texte : on approxime par le
+    nombre de caractères. Les bornes évitent des colonnes trop étroites ou,
+    à l'inverse, démesurées (ex. un titre TCRE très long).
+
+    Ignore les cellules fusionnées et les graphiques (qui ne portent pas de
+    largeur de colonne).
+    """
+    largeurs = {}  # lettre de colonne -> longueur max observée
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is None:
+                continue
+            # Longueur du texte affiché. Pour les dates, on estime ~10 (jj/mm/aaaa).
+            if hasattr(cell.value, "strftime"):
+                longueur = 10
+            else:
+                # Pour un nombre à 3 décimales, la repr str suffit comme approximation
+                longueur = len(str(cell.value))
+            col = cell.column_letter
+            if longueur > largeurs.get(col, 0):
+                largeurs[col] = longueur
+
+    for col, longueur in largeurs.items():
+        # +2 de marge pour respirer ; borné entre min et max
+        largeur = max(largeur_min, min(longueur + 2, largeur_max))
+        ws.column_dimensions[col].width = largeur
+
+
 def ecrire_classeur(modele, jira, sortie_path):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
@@ -338,6 +370,8 @@ def ecrire_classeur(modele, jira, sortie_path):
         ratio = (s["total"] / sp) if sp else 0.0
         ws_stats.append([code, sp, s["total"], ratio,
                          s["po_sm"], s["ba"], s["dev"], s["qa"], titre])
+        # Ratio (colonne D) : 3 décimales maximum
+        ws_stats.cell(row=r, column=4).number_format = "0.###"
         # Lien interne vers l'onglet TCRE, seulement s'il existe (conso > 0)
         if code in codes_avec_onglet:
             cell = ws_stats.cell(row=r, column=1)
@@ -502,9 +536,9 @@ def ecrire_classeur(modele, jira, sortie_path):
             pie2.dataLabels = _labels_cat_pourcentage()
             ws.add_chart(pie2, "E18")
 
-        ws.column_dimensions["A"].width = 22
-        ws.column_dimensions["B"].width = 18
-        ws.column_dimensions["C"].width = 14
+    # Ajustement automatique de la largeur des colonnes sur TOUS les onglets
+    for ws in wb.worksheets:
+        _ajuster_colonnes(ws)
 
     # Placer l'onglet Stats en première position
     if "Stats" in wb.sheetnames:
@@ -525,6 +559,23 @@ def chrono(nom, fn):
     return res
 
 
+def ouvrir_fichier(chemin):
+    """Ouvre un fichier avec l'application par défaut du système.
+    Multiplateforme (macOS / Windows / Linux). N'interrompt jamais le script :
+    si l'ouverture échoue, le fichier reste généré et accessible manuellement.
+    """
+    try:
+        if sys.platform == "darwin":          # macOS
+            subprocess.run(["open", chemin], check=False)
+        elif sys.platform.startswith("win"):  # Windows
+            os.startfile(chemin)              # type: ignore[attr-defined]
+        else:                                  # Linux et autres
+            subprocess.run(["xdg-open", chemin], check=False)
+    except Exception as e:
+        print(f"   (Ouverture automatique impossible : {e})")
+        print(f"   Ouvre le fichier manuellement : {chemin}")
+
+
 def main():
     cfg = charger_config()
     token = cfg["jira"]["api_token"]
@@ -536,17 +587,19 @@ def main():
                   for n, r in cfg.get("ressources", {}).items()}
     # normpath : tolère les séparateurs / ou \ quelle que soit la plateforme
     csv_path = os.path.normpath(cfg["chemins"]["csv"])
-    excel_src = os.path.normpath(cfg["chemins"]["excel"])
 
     if not os.path.exists(csv_path):
         print(f"❌ CSV introuvable : {csv_path}")
         print("   Vérifie le chemin 'csv' dans config.toml.")
         return
 
-    # Fichier de sortie : à côté de l'Excel d'origine, suffixé _V2
-    base = os.path.splitext(os.path.basename(excel_src))[0]
-    dossier_sortie = os.path.dirname(excel_src) or _BASE_DIR
-    sortie = os.path.join(dossier_sortie, f"{base}_V2.xlsx")
+    # Dossier de sortie (depuis la config), créé s'il n'existe pas.
+    dossier_sortie = os.path.normpath(cfg["chemins"]["dossier_sortie"])
+    os.makedirs(dossier_sortie, exist_ok=True)
+
+    # Nom du fichier généré : horodaté (date + heure) pour ne rien écraser.
+    horodatage = datetime.now().strftime("%Y-%m-%d_%Hh%M")
+    sortie = os.path.join(dossier_sortie, f"SPII_vs_SP_{horodatage}.xlsx")
 
     print("Construction du modèle métier...")
     modele = chrono("Lecture CSV + modèle",
@@ -561,6 +614,9 @@ def main():
            lambda: ecrire_classeur(modele, jira, sortie))
 
     print(f"\n✅ Terminé : {sortie}")
+
+    # Ouverture automatique du fichier généré
+    ouvrir_fichier(sortie)
 
 
 if __name__ == "__main__":

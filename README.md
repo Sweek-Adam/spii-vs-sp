@@ -18,9 +18,9 @@ multiplateforme Mac/Windows).
 Le script lit deux fichiers de config, à placer à côté de `spii_v2.py`. Aucun
 des deux contenant des secrets n'est versionné — tu pars des modèles fournis :
 
-1. **`config.toml`** — copie `config.windows.exemple.toml` (ou crée le tien) et
-   renseigne : chemins du CSV et de l'Excel, paramètres Jira (email, url,
-   projet), et la liste des ressources avec leur rôle.
+1. **`config.toml`** — copie `config.toml.exemple` (ou crée le tien) et
+   renseigne : le chemin du CSV à lire, le dossier de sortie, les paramètres
+   Jira (email, url, projet), et la liste des ressources avec leur rôle.
 
 2. **`secrets.toml`** — copie `secrets.toml.exemple` en `secrets.toml` et mets
    ton token Jira. ⚠ **Ce fichier ne doit jamais être committé** (il est dans
@@ -32,8 +32,9 @@ des deux contenant des secrets n'est versionné — tu pars des modèles fournis
 python spii_v2.py
 ```
 
-Le script lit le CSV, interroge Jira, et écrit un nouveau fichier
-`<nom>_V2.xlsx` à côté de l'Excel d'origine. **L'original n'est jamais modifié.**
+Le script lit le CSV, interroge Jira, et écrit un fichier horodaté
+(ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`) dans le dossier de sortie indiqué en
+config. Aucun fichier existant n'est modifié.
 
 ## Installation sur Windows
 

@@ -87,8 +87,8 @@ Dans le même dossier que `spii_v2.py`, tu dois avoir :
 - **secrets.toml** — ton token Jira (à NE PAS partager / versionner)
 
 Pour config.toml, pars de `config.toml.exemple` fourni :
-renomme-le en `config.toml` et adapte les deux chemins de la section
-`[chemins]` (excel et csv).
+renomme-le en `config.toml` et adapte les chemins de la section
+`[chemins]` : `csv` (le fichier à lire) et `dossier_sortie` (où écrire).
 
 ### ⚠ Chemins Windows dans le TOML
 
@@ -97,8 +97,8 @@ L'antislash `\` est un caractère spécial en TOML. Le plus simple : utilise des
 
 ```toml
 [chemins]
-excel = 'C:\Users\TonNom\Documents\SPII vs SP.xlsx'
-csv   = 'C:\Users\TonNom\Documents\y25VUE9.csv'
+csv            = 'C:\Users\TonNom\Documents\export.csv'
+dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
 ```
 
 Pour secrets.toml :
@@ -123,9 +123,10 @@ python spii_v2.py
 Le script :
 1. lit le CSV,
 2. interroge Jira en parallèle,
-3. génère un nouveau fichier **« <nom>_V2.xlsx »** à côté de ton Excel d'origine.
+3. génère un fichier horodaté (ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`) dans le
+   dossier de sortie indiqué en config (créé s'il n'existe pas).
 
-Ton fichier Excel d'origine n'est jamais modifié.
+Aucun fichier existant n'est modifié.
 
 > Astuce confort : tu peux créer un petit fichier `lancer.bat` à côté du script
 > contenant une seule ligne — le chemin complet vers le python de WinPython

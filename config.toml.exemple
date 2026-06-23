@@ -9,13 +9,13 @@
 #   normales (entre guillemets doubles "). Deux options sûres :
 #
 #   Option 1 (recommandée) — guillemets SIMPLES ' ' : antislash littéral.
-#       excel = 'C:\Users\TonNom\Documents\SPII vs SP.xlsx'
+#       dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
 #
 #   Option 2 — guillemets DOUBLES " " : doubler chaque antislash.
-#       excel = "C:\\Users\\TonNom\\Documents\\SPII vs SP.xlsx"
+#       dossier_sortie = "C:\\Users\\TonNom\\Documents\\Sorties"
 #
 #   (Les slashs / fonctionnent aussi partout :
-#       excel = "C:/Users/TonNom/Documents/SPII vs SP.xlsx")
+#       dossier_sortie = "C:/Users/TonNom/Documents/Sorties")
 # =====================================================================
 
 [jira]
@@ -25,10 +25,13 @@ sp_field = "customfield_XXXXX"     # ton champ Story Points
 projet   = "PROJET"                # préfixe global du JQL : key ~ "PROJET-"
 
 [chemins]
-# Adapte ces deux chemins à ton arborescence.
+# Adapte ces chemins à ton arborescence.
 # Guillemets SIMPLES = pas besoin de doubler les antislashs.
-excel = 'C:\Users\TonNom\Documents\SPII vs SP.xlsx'
-csv   = 'C:\Users\TonNom\Documents\export.csv'
+# - csv            : le fichier export à lire (doit exister)
+# - dossier_sortie : où écrire le fichier généré (créé s'il n'existe pas).
+#   Le fichier produit est nommé automatiquement, ex. SPII_vs_SP_2026-06-23_10h38.xlsx
+csv            = 'C:\Users\TonNom\Documents\export.csv'
+dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
 
 # Équipe : "Nom complet de la ressource" = "Rôle"
 # Le nom doit correspondre EXACTEMENT à la colonne Ressource du CSV.
