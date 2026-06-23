@@ -82,19 +82,7 @@ pip.
 
 ---
 
-## 3. Pas d'environnement virtuel à créer
-
-Avec WinPython, **tu n'as pas besoin de créer un environnement virtuel** : la
-distribution portable est déjà un environnement Python isolé et autonome. Tout
-ce que tu installes avec pip reste contenu dans le dossier WinPython, sans
-affecter le reste de la machine.
-
-Il suffit d'utiliser le **« WinPython Command Prompt.exe »** (repéré à l'étape
-précédente) pour toutes les commandes qui suivent.
-
----
-
-## 4. Installer les dépendances
+## 3. Installer les dépendances
 
 Ouvre le **« WinPython Command Prompt.exe »** et tape :
 
@@ -116,11 +104,11 @@ a déjà le lecteur TOML intégré.
 
 ---
 
-## 5. Préparer les fichiers de configuration
+## 4. Préparer les fichiers de configuration
 
 Dans le même dossier que `spii_v2.py`, tu dois avoir :
 
-- **config.toml** — équipe, chemins, projet Jira (partageable)
+- **config.toml** — équipe, chemins, projet Jira
 - **secrets.toml** — ton token Jira (à NE PAS partager / versionner)
 
 Pour config.toml, pars de `config.toml.exemple` fourni :
@@ -138,16 +126,53 @@ csv            = 'C:\Users\TonNom\Documents\export.csv'
 dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
 ```
 
-Pour secrets.toml :
+### Renseigner l'équipe (section `[ressources]`)
+
+Toujours dans config.toml, la section `[ressources]` liste les collaborateurs
+à suivre, avec leur rôle. **Deux points importants :**
+
+- Le **nom de chaque collaborateur doit être identique au nom exact tel qu'il
+  apparaît dans l'export SPII** (le fichier CSV). La moindre différence
+  (accent, espace, ordre prénom/nom) fait que la personne ne sera pas reconnue
+  et sa consommation ignorée.
+- Indique le **rôle** de chacun, parmi : `PO`, `SM`, `BA`, `DEV`, `QA`.
+
+```toml
+[ressources]
+"Nom Prenom1" = "PO"
+"Nom Prenom2" = "DEV"
+"Nom Prenom3" = "QA"
+```
+
+### Créer ton token Jira (secrets.toml)
+
+Le script se connecte à Jira avec un **token d'API** (pas ton mot de passe).
+Pour le générer :
+
+1. Va sur **https://id.atlassian.com/manage-profile/security/api-tokens**
+   (connecté avec ton compte Atlassian / Jira).
+2. Clique sur **« Create API token »** (Créer un token d'API).
+3. Donne-lui un nom parlant, par exemple `spii-vs-sp`.
+4. Choisis une date d'expiration (de 1 jour à 1 an — Atlassian impose une
+   limite, note la date pour penser à le renouveler).
+5. Clique **« Create »**, puis **« Copy to clipboard »**.
+
+⚠ Le token n'est affiché **qu'une seule fois** : copie-le tout de suite. Si tu
+fermes la fenêtre sans le copier, il faudra en générer un nouveau.
+
+Crée ensuite `secrets.toml` (à partir de `secrets.toml.exemple`) et colle le
+token :
 
 ```toml
 [jira]
 api_token = "colle_ton_token_ici"
 ```
 
+L'email et l'URL Jira, eux, se renseignent dans config.toml (section `[jira]`).
+
 ---
 
-## 6. Lancer le script
+## 5. Lancer le script
 
 ### Méthode simple — le script `lancer.ps1`
 
@@ -173,13 +198,18 @@ python_exe = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\
 > Si le champ est vide ou le chemin faux, `lancer.ps1` s'arrête avec un message
 > t'indiquant quoi corriger.
 
-> ⚠ Si PowerShell refuse d'exécuter le script (« exécution de scripts
-> désactivée »), ouvre PowerShell et lance d'abord cette commande (sans admin,
-> valable pour la session en cours uniquement) :
-> ```
-> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-> ```
-> puis relance `lancer.ps1`.
+**Avant le tout premier lancement**, Windows bloque par défaut l'exécution des
+scripts PowerShell. Autorise-les pour ton compte (sans droits admin) en lançant
+une fois cette commande dans PowerShell :
+
+```
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+Réponds `O` (ou `Y`) si une confirmation est demandée. Ce réglage est durable
+(à faire une seule fois) et sûr : il autorise les scripts locaux comme
+`lancer.ps1` tout en bloquant les scripts non signés téléchargés d'Internet.
+Ensuite, tu peux lancer `lancer.ps1` autant de fois que tu veux.
 
 ### Méthode manuelle — en ligne de commande
 
@@ -203,7 +233,7 @@ Aucun fichier existant n'est modifié. Le fichier généré s'ouvre automatiquem
 
 ---
 
-## 7. En cas de souci
+## 6. En cas de souci
 
 - **`python n'est pas reconnu`** → tu n'utilises pas le « WinPython Command
   Prompt ». Ouvre bien `WinPython Command Prompt.exe` depuis le dossier
@@ -213,17 +243,7 @@ Aucun fichier existant n'est modifié. Le fichier généré s'ouvre automatiquem
   « Copier en tant que chemin d'accès » te donne le chemin exact.
 - **`Token Jira manquant`** → renseigne `api_token` dans secrets.toml.
 - **Erreur de module (`No module named ...`)** → la dépendance n'est pas
-  installée dans CE WinPython (refais l'étape 4 depuis le WinPython Command
+  installée dans CE WinPython (refais l'étape 3 depuis le WinPython Command
   Prompt).
 - **Comportements bizarres / chemins longs** → si tu as décompressé WinPython
   dans un dossier très profond, déplace-le vers un chemin court (ex. `C:\WPy`).
-
----
-
-## Note sur l'affichage Excel
-
-Le fichier généré est identique quelle que soit la plateforme. C'est Excel qui
-l'affiche, et Excel Windows a tendance à mieux rendre certains détails
-(étiquettes de camembert, graduations du nuage de points, hyperliens) que sa
-version Mac. Si tu avais des petits écarts d'affichage sur Mac, ils devraient
-être au moins aussi bons, voire meilleurs, sur Windows.
