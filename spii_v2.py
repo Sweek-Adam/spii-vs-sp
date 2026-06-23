@@ -472,12 +472,14 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         titre = jira.get(code, {}).get("titre", "")
         pi = jira.get(code, {}).get("pi", "")
         statut = jira.get(code, {}).get("statut", "")
-        ratio = (s["total"] / sp) if sp else 0.0
+        # Ratio arrondi à 3 décimales en amont : combiné au format "General",
+        # un entier s'affiche sans virgule (5 -> "5") et un décimal garde au
+        # plus 3 chiffres (14,285714... -> 14,286).
+        ratio = round(s["total"] / sp, 3) if sp else 0
         ws_stats.append([code, sp, s["total"], ratio,
                          s["po_sm"], s["ba"], s["dev"], s["qa"], titre, pi, statut])
-        # Ratio (colonne D) : jusqu'à 3 décimales, mais un zéro s'affiche "0"
-        # (et non "0,"). Format à 3 sections : positif ; négatif ; zéro.
-        ws_stats.cell(row=r, column=4).number_format = "0.###;-0.###;0"
+        # Format General : affichage naturel, sans virgule parasite sur les entiers.
+        ws_stats.cell(row=r, column=4).number_format = "General"
         # Lien interne vers l'onglet TCRE, seulement s'il existe (conso > 0)
         if code in codes_avec_onglet:
             cell = ws_stats.cell(row=r, column=1)
