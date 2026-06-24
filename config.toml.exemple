@@ -20,10 +20,11 @@
 
 [jira]
 email    = "prenom.nom@exemple.com"
-url      = "https://votre-instance.atlassian.net"
+url      = "https://imsa.atlassian.net"
 sp_field = "customfield_10024"     # ton champ Story Points
 pi_field = "customfield_11400"     # ton champ Planning Interval (optionnel)
 projet   = "LIEVRE"                # cle du projet Jira (filtre les stories : PROJECT = "LIEVRE")
+prefixe_feature = "TCRE"           # prefixe des features a suivre (ex. TCRE -> TCRE-649)
 
 [chemins]
 # Adapte ces chemins à ton arborescence.

@@ -136,9 +136,13 @@ def _labels_cat_pourcentage():
     return dl
 
 
-def construire_modele(csv_path, dict_param):
+def construire_modele(csv_path, dict_param, prefixe="TCRE"):
     df = pd.read_csv(csv_path, sep=None, engine="python",
                      encoding="latin1", index_col=False)
+
+    # Regex de détection des features : <prefixe>-<numéro> (ex. TCRE-649).
+    # re.escape protège un préfixe contenant d'éventuels caractères spéciaux.
+    motif_feature = re.compile(rf"{re.escape(prefixe)}-\d{{1,}}", re.IGNORECASE)
 
     features_conso = {}   # code -> [12 mois]
     collab_data = {}      # nom -> {role, rows, total}
@@ -160,7 +164,7 @@ def construire_modele(csv_path, dict_param):
         role = dict_param[ressource_maj].upper()
 
         livrable = str(row["Livrable"]) if pd.notna(row["Livrable"]) else ""
-        match = re.search(r"TCRE-\d{1,}", livrable, re.IGNORECASE)
+        match = motif_feature.search(livrable)
         valeurs = [conv_num(row[c]) for c in MOIS_COLS]
         total_ligne = sum(valeurs)
 
@@ -379,9 +383,13 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     collab = modele["collab_data"]
     stats = modele["stats"]
 
-    # Tri des TCRE par numéro
+    # Préfixe des features (ex. "TCRE"), configurable.
+    prefixe = str(cfg["jira"].get("prefixe_feature", "TCRE")).strip() or "TCRE"
+
+    # Tri des features par numéro
+    motif_num = re.compile(rf"{re.escape(prefixe)}-(\d+)", re.IGNORECASE)
     def num(code):
-        m = re.search(r"TCRE-(\d+)", code, re.IGNORECASE)
+        m = motif_num.search(code)
         return int(m.group(1)) if m else 0
     codes_tries = sorted(features.keys(), key=num)
 
@@ -549,7 +557,7 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     # --- Graphique nuage de points : SP (X) vs Total consommé (Y), 1 point/TCRE ---
     if derniere >= 2:
         scatter = ScatterChart()
-        scatter.title = "Features TCRE : Story Points vs Jours réels"
+        scatter.title = f"Features {prefixe} : Story Points vs Jours réels"
         scatter.x_axis.title = "Story Points"
         scatter.y_axis.title = "Total consommé (jours)"
         scatter.height, scatter.width = 9, 14
@@ -567,7 +575,7 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         scatter.y_axis.delete = False
         xref = Reference(ws_stats, min_col=2, min_row=2, max_row=derniere)  # SP
         yref = Reference(ws_stats, min_col=3, min_row=2, max_row=derniere)  # Total
-        serie = Series(yref, xref, title="Features TCRE")
+        serie = Series(yref, xref, title=f"Features {prefixe}")
         serie.marker.symbol = "circle"
         serie.graphicalProperties.line.noFill = True  # points seuls, pas de ligne
         scatter.series.append(serie)
@@ -757,12 +765,15 @@ def main():
     sortie = os.path.join(dossier_sortie,
                           f"SPII_vs_SP_{bloc_projet}{horodatage}.xlsx")
 
+    # Préfixe des features (ex. "TCRE"), configurable.
+    prefixe = str(cfg["jira"].get("prefixe_feature", "TCRE")).strip() or "TCRE"
+
     print("Construction du modèle métier...")
     modele = chrono("Lecture CSV + modèle",
-                    lambda: construire_modele(csv_path, dict_param))
+                    lambda: construire_modele(csv_path, dict_param, prefixe))
 
     codes = list(modele["features_conso"].keys())
-    print(f"Appels Jira ({len(codes)} TCRE, parallèle)...")
+    print(f"Appels Jira ({len(codes)} {prefixe}, parallèle)...")
     jira = chrono("Jira", lambda: recuperer_jira(codes, cfg))
 
     print(f"Écriture du classeur openpyxl -> {os.path.basename(sortie)}...")

@@ -55,6 +55,22 @@ function Ecrire-SansBOM($chemin, $contenu) {
     [System.IO.File]::WriteAllText($chemin, $contenu, $utf8SansBom)
 }
 
+function Lire-Exemple($cle, $defaut = "") {
+    # Lit une valeur (cle = "...") depuis config.toml.exemple s'il existe.
+    # Sert a reprendre les champs fixes (url, sp_field, pi_field) sans les
+    # redemander a l'utilisateur. Renvoie $defaut si introuvable.
+    $ex = Join-Path $PSScriptRoot "config.toml.exemple"
+    if (Test-Path $ex) {
+        foreach ($ligne in Get-Content $ex) {
+            $sans = $ligne -replace '#.*$', ''
+            if ($sans -match ("^\s*" + [regex]::Escape($cle) + "\s*=\s*[""'](.+?)[""']\s*$")) {
+                return $matches[1].Trim()
+            }
+        }
+    }
+    return $defaut
+}
+
 function Construire-Config($jira, $chemins, $ressources) {
     # Reconstruit un config.toml complet a partir des reponses.
     $sb = [System.Text.StringBuilder]::new()
@@ -67,6 +83,7 @@ function Construire-Config($jira, $chemins, $ressources) {
     [void]$sb.AppendLine("sp_field = '$(Echapper-Toml $jira.sp_field)'")
     [void]$sb.AppendLine("pi_field = '$(Echapper-Toml $jira.pi_field)'")
     [void]$sb.AppendLine("projet   = '$(Echapper-Toml $jira.projet)'")
+    [void]$sb.AppendLine("prefixe_feature = '$(Echapper-Toml $jira.prefixe_feature)'")
     [void]$sb.AppendLine("")
     [void]$sb.AppendLine("[chemins]")
     [void]$sb.AppendLine("csv            = '$(Echapper-Toml $chemins.csv)'")
@@ -89,13 +106,17 @@ function Questionnaire-Config {
     Write-Host ""
 
     Write-Host "  -- Jira --" -ForegroundColor White
+    # url, sp_field et pi_field sont repris du fichier config.toml.exemple
+    # (valeurs fixes pour l'instance) : on ne les redemande pas.
     $jira = @{
-        email    = Demander "Email Jira (ex. prenom.nom@decathlon.com)"
-        url      = Demander "URL Jira (ex. https://xxx.atlassian.net)"
-        sp_field = Demander "Champ Story Points" "customfield_10024"
-        pi_field = Demander "Champ Planning Interval" "customfield_11400"
-        projet   = Demander "Cle projet (ex. LIEVRE)"
+        email    = Demander "Email Jira (ex. prenom.nom@imsa.msa.fr)"
+        url      = Lire-Exemple "url"      "https://imsa.atlassian.net"
+        sp_field = Lire-Exemple "sp_field" "customfield_10024"
+        pi_field = Lire-Exemple "pi_field" "customfield_11400"
+        projet   = Demander "Cle projet (ex. LIEVRE)" "LIEVRE"
+        prefixe_feature = Lire-Exemple "prefixe_feature" "TCRE"
     }
+    Info ("url / sp_field / pi_field / prefixe repris de l'exemple : {0}, {1}, {2}, {3}" -f $jira.url, $jira.sp_field, $jira.pi_field, $jira.prefixe_feature)
 
     Write-Host ""
     Write-Host "  -- Chemins --" -ForegroundColor White
@@ -108,13 +129,17 @@ function Questionnaire-Config {
 
     Write-Host ""
     Write-Host "  -- Equipe (ressources) --" -ForegroundColor White
-    Info "Saisis chaque membre. Laisse le NOM vide pour terminer la liste."
+    Info "Pour chaque membre : tape d'abord le NOM Prenom, puis Entree ;"
+    Info "le script demande ensuite son role."
+    Info "Le nom doit correspondre EXACTEMENT a la colonne Ressource du CSV."
     Info "Roles attendus : PO, SM, BA, DEV, QA."
+    Info "Quand tu as fini, laisse le nom VIDE et appuie sur Entree."
     $ressources = @()
     while ($true) {
-        $nom = Demander "Nom complet (EXACTEMENT comme dans le CSV)"
+        Write-Host ""
+        $nom = Demander "Nom Prenom (ou Entree pour terminer)"
         if ([string]::IsNullOrWhiteSpace($nom)) { break }
-        $role = (Demander ("  -> Role de {0} (PO/SM/BA/DEV/QA)" -f $nom)).ToUpper()
+        $role = (Demander ("Role de {0} (PO/SM/BA/DEV/QA)" -f $nom)).ToUpper()
         $ressources += @{ nom = $nom; role = $role }
         OK ("Ajoute : {0} = {1}" -f $nom, $role)
     }
