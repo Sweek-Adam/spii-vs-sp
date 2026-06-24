@@ -86,8 +86,10 @@ Concrètement, le script automatise presque tout le reste de ce guide :
 - télécharge WinPython s'il est absent (Python portable, sans admin) ;
 - installe les dépendances Python ;
 - **propose un questionnaire** pour remplir `config.toml` et `secrets.toml`
-  (infos Jira, chemins, équipe membre par membre, token) — tu peux le passer
-  et éditer les fichiers à la main si tu préfères ;
+  (email Jira, clé projet, chemins, équipe membre par membre, token) — l'URL
+  Jira, les identifiants de champs et le préfixe de feature sont repris du
+  fichier exemple, pas redemandés. Tu peux passer le questionnaire et éditer à
+  la main si tu préfères ;
 - renseigne le chemin Python dans `config.toml` ;
 - règle l'autorisation d'exécution des scripts PowerShell ;
 - affiche un récapitulatif et la liste de ce qu'il te reste à faire à la main.
@@ -120,7 +122,7 @@ WinPython, par exemple :
 
 ```toml
 [chemins]
-python_exe = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\python.exe'
+python_exe = 'C:\Users\TonNom\WinPython\WPy64-31450\python\python.exe'
 ```
 
 > Astuce pour trouver ce chemin : dans l'explorateur, ouvre le dossier
@@ -258,14 +260,18 @@ détaillé ci-dessous.
   laisses vide, cette colonne reste simplement vide.
 - **`projet`** — le préfixe des tickets à comptabiliser (ex. `LIEVRE`), utilisé
   pour filtrer les liens dans Jira.
+- **`prefixe_feature`** — le préfixe des features à suivre dans les livrables
+  (ex. `TCRE`, qui détecte `TCRE-649`, `TCRE-5`, etc.). C'est ce préfixe qui sert
+  à repérer les features dans le CSV, à les trier et à construire les liens Jira.
 
 ```toml
 [jira]
 email    = "prenom.nom@exemple.com"
-url      = "https://votre-instance.atlassian.net"
+url      = "https://imsa.atlassian.net"
 sp_field = "customfield_10024"
 pi_field = "customfield_11400"
-projet   = "PROJET"
+projet   = "LIEVRE"
+prefixe_feature = "TCRE"
 ```
 
 #### Section `[chemins]`
@@ -281,9 +287,9 @@ projet   = "PROJET"
 
 ```toml
 [chemins]
-csv            = 'C:\Users\TonNom\Documents\export.csv'
+csv            = 'C:\Users\TonNom\Documents\y25VUE9.csv'
 dossier_sortie = 'C:\Users\TonNom\Documents\Sorties'
-python_exe     = 'C:\Users\TonNom\Documents\spii-vs-sp\WinPython\WPy64-31450\python\python.exe'
+python_exe     = 'C:\Users\TonNom\WinPython\WPy64-31450\python\python.exe'
 ```
 
 #### Section `[ressources]`
