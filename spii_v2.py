@@ -375,32 +375,9 @@ def _ajouter_legende_degrade(ws, cell_ancre):
         ws.cell(row=rr, column=c0 + 1, value=libelle)
 
 
-def ecrire_classeur(modele, jira, sortie_path, cfg):
-    wb = Workbook()
-    wb.remove(wb.active)  # retire la feuille vide par défaut
-
-    features = modele["features_conso"]
-    collab = modele["collab_data"]
-    stats = modele["stats"]
-
-    # Préfixe des features (ex. "TCRE"), configurable.
-    prefixe = str(cfg["jira"].get("prefixe_feature", "TCRE")).strip() or "TCRE"
-
-    # Tri des features par numéro
-    motif_num = re.compile(rf"{re.escape(prefixe)}-(\d+)", re.IGNORECASE)
-    def num(code):
-        m = motif_num.search(code)
-        return int(m.group(1)) if m else 0
-    codes_tries = sorted(features.keys(), key=num)
-
-    # TCRE qui auront un onglet dédié (conso > 0) : sert aux liens internes.
-    codes_avec_onglet = {c for c in codes_tries if stats[c]["total"] > 0}
-
-    # Style de lien interne (bleu souligné, comme un hyperlien classique)
-    FONT_LIEN = Font(name="Arial", color="0563C1", underline="single")
-
-    projet = cfg["jira"]["projet"]
-    # --- Suivi_Features ---
+def _ecrire_suivi_features(wb, projet, codes_tries, features, jira):
+    """Onglet 'Suivi_Features_<projet>' : une ligne par feature avec PI, statut,
+    consommation mensuelle et total, plus un dégradé sur le total."""
     ws_feat = wb.create_sheet("Suivi_Features_" + projet)
     ws_feat.append(["Code Feature", "Planning Interval", "Statut"]
                    + ENTETES_MOIS + ["Total Consommé"])
@@ -417,7 +394,11 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     # Légende des couleurs du dégradé (à droite du tableau, colonne R)
     _ajouter_legende_degrade(ws_feat, "R2")
 
-    # --- Onglets collaborateurs ---
+
+def _ecrire_onglets_collaborateurs(wb, collab, jira):
+    """Un onglet par collaborateur : ses lignes de consommation (avec PI inséré),
+    un dégradé sur le total (hors 'Indispo DOSI ACCORDS'), une ligne TOTAL et la
+    légende."""
     for nom, data in collab.items():
         ws = wb.create_sheet(nom[:31])  # limite Excel : 31 car.
         ws.append(["Projet", "Livrable d'origine", "Feature (Racine)",
@@ -462,7 +443,12 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         # Légende des couleurs du dégradé (colonne S, sous le "Rôle")
         _ajouter_legende_degrade(ws, "S3")
 
-    # --- Stats ---
+
+def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
+                  font_lien):
+    """Onglet Stats : tableau de synthèse par feature (SP, conso, ratio,
+    ventilation par rôle, liens), lignes TOTAL et MOYENNE, dégradé, tableau de
+    synthèse par complexité et nuage de points SP vs jours. Renvoie l'onglet."""
     ws_stats = wb.create_sheet("Stats")
     # Ordre : Feature, Statut, Planning Interval, puis les indicateurs.
     ws_stats.append(["Feature", "Statut", "Planning Interval",
@@ -494,12 +480,12 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         if code in codes_avec_onglet:
             cell = ws_stats.cell(row=r, column=1)
             cell.hyperlink = f"#'{code}'!A1"
-            cell.font = FONT_LIEN
+            cell.font = font_lien
         # Lien cliquable vers la page Jira de la feature (colonne L)
         if url_base_jira:
             cell_jira = ws_stats.cell(row=r, column=12, value="Ouvrir ↗")
             cell_jira.hyperlink = f"{url_base_jira}/browse/{code}"
-            cell_jira.font = FONT_LIEN
+            cell_jira.font = font_lien
         sp_total_par_feature.append((sp, s["total"]))
         r += 1
     derniere = r - 1
@@ -556,9 +542,8 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         ws_stats.cell(row=rr, column=1, value=sp_val)
         ws_stats.cell(row=rr, column=2, value=round(moyenne, 2)).number_format = '0.00'
         ws_stats.cell(row=rr, column=3, value=len(totaux))
-    recap_last = recap_first + len(par_sp) - 1
 
-    # --- Graphique nuage de points : SP (X) vs Total consommé (Y), 1 point/TCRE ---
+    # --- Graphique nuage de points : SP (X) vs Total consommé (Y), 1 point/feature ---
     if derniere >= 2:
         scatter = ScatterChart()
         scatter.title = f"Features {prefixe} : Story Points vs Jours réels"
@@ -585,10 +570,14 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         scatter.series.append(serie)
         ws_stats.add_chart(scatter, f"E{start_recap}")
 
-    # --- Onglets par TCRE (avec camemberts) ---
-    # On ne crée un onglet dédié que si le TCRE a une consommation > 0.
-    # (Les lignes restent présentes dans Stats et Suivi_Features.)
-    for idx, code in enumerate(codes_tries):
+    return ws_stats
+
+
+def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
+    """Un onglet par feature ayant une consommation > 0 : titre, PI, liens
+    (retour Stats + Jira), tableau par profil et tableau par collaborateur
+    (chacun avec colonne %), et leurs deux camemberts."""
+    for code in codes_tries:
         s = stats[code]
         if s["total"] <= 0:
             continue
@@ -607,14 +596,14 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         # Lien retour vers l'onglet Stats (ligne 3, colonne A)
         lien = ws.cell(row=3, column=1, value="← Retour vers Stats")
         lien.hyperlink = "#'Stats'!A1"
-        lien.font = FONT_LIEN
+        lien.font = font_lien
 
         # Lien vers la page Jira du TCRE (ligne 3, colonne B, à droite du retour)
         url_base = str(cfg["jira"].get("url", "")).rstrip("/")
         if url_base:
             lien_jira = ws.cell(row=3, column=2, value="Ouvrir dans Jira ↗")
             lien_jira.hyperlink = f"{url_base}/browse/{code}"
-            lien_jira.font = FONT_LIEN
+            lien_jira.font = font_lien
 
         # Tableau 1 : par profil (affiché en entier, y compris les profils à 0)
         ws.cell(row=4, column=1, value="Profil / Rôle")
@@ -712,6 +701,41 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
             pie2.set_categories(cats2)
             pie2.dataLabels = _labels_cat_pourcentage()
             ws.add_chart(pie2, "E22")
+
+
+def ecrire_classeur(modele, jira, sortie_path, cfg):
+    wb = Workbook()
+    wb.remove(wb.active)  # retire la feuille vide par défaut
+
+    features = modele["features_conso"]
+    collab = modele["collab_data"]
+    stats = modele["stats"]
+
+    # Préfixe des features (ex. "TCRE"), configurable.
+    prefixe = str(cfg["jira"].get("prefixe_feature", "TCRE")).strip() or "TCRE"
+
+    # Tri des features par numéro
+    motif_num = re.compile(rf"{re.escape(prefixe)}-(\d+)", re.IGNORECASE)
+    def num(code):
+        m = motif_num.search(code)
+        return int(m.group(1)) if m else 0
+    codes_tries = sorted(features.keys(), key=num)
+
+    # TCRE qui auront un onglet dédié (conso > 0) : sert aux liens internes.
+    codes_avec_onglet = {c for c in codes_tries if stats[c]["total"] > 0}
+
+    # Style de lien interne (bleu souligné, comme un hyperlien classique)
+    FONT_LIEN = Font(name="Arial", color="0563C1", underline="single")
+
+    projet = cfg["jira"]["projet"]
+    _ecrire_suivi_features(wb, projet, codes_tries, features, jira)
+
+    _ecrire_onglets_collaborateurs(wb, collab, jira)
+
+    ws_stats = _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe,
+                             codes_avec_onglet, FONT_LIEN)
+
+    _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, FONT_LIEN)
 
     # Ajustement automatique de la largeur des colonnes sur TOUS les onglets
     for ws in wb.worksheets:

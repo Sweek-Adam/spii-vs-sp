@@ -1,32 +1,47 @@
 # SPII vs SP — Génération du suivi de consommation
 
-Script Python qui génère un classeur Excel de suivi de consommation par TCRE,
-à partir d'un export CSV et de l'API Jira (Story Points + titres).
+Script Python qui génère un classeur Excel de suivi de consommation des features
+(par défaut « TCRE »), à partir d'un export CSV et de l'API Jira (Story Points,
+titres, Planning Interval et statut).
 
-Génère, par TCRE, des onglets détaillés avec camemberts ; un onglet Stats de
-synthèse (ratios jours/SP, nuage de points, liens de navigation) ; et un onglet
-par collaborateur. Le tout via **openpyxl** (pas besoin qu'Excel soit ouvert,
-multiplateforme Mac/Windows).
+Il produit :
+
+- un onglet **Stats** de synthèse : par feature, les Story Points, la conso
+  totale, le ratio jours/SP, la ventilation par rôle (PO/SM, BA, Dévs, QA), le
+  statut, le Planning Interval, des liens vers Jira et vers le détail ; plus un
+  tableau de moyennes par complexité et un nuage de points SP vs jours ;
+- un onglet **Suivi_Features_<projet>** : conso mensuelle par feature, avec PI,
+  statut et un dégradé de couleur sur le total ;
+- un onglet **par collaborateur** : ses lignes de conso avec dégradé ;
+- un onglet **par feature** (conso > 0) : tableaux par profil et par
+  collaborateur (jours **et %**) avec camemberts, et liens de navigation.
+
+Le tout via **openpyxl** (pas besoin qu'Excel soit ouvert, multiplateforme
+Mac/Windows).
 
 ## Prérequis
 
-- Python 3.11+ (ou 3.10 avec le paquet `tomli`)
-- Dépendances : `pip install pandas openpyxl requests`
-- Sur réseau d'entreprise avec proxy SSL : ajouter `truststore`
-  (`pip install truststore`) pour que Python utilise les certificats du système
+- Python 3.11+ (le lecteur TOML est intégré ; sur 3.10, ajouter `tomli`)
+- Dépendances : `pip install pandas openpyxl requests truststore`
+  - `truststore` permet, sur réseau d'entreprise avec proxy SSL, d'utiliser les
+    certificats du système pour joindre Jira (sinon erreur de certificat).
 
 ## Configuration (avant le premier lancement)
 
-Le script lit deux fichiers de config, à placer à côté de `spii_v2.py`. Aucun
-des deux contenant des secrets n'est versionné — tu pars des modèles fournis :
+Le script lit deux fichiers, à placer à côté de `spii_v2.py`. Aucun des deux
+n'est versionné (ils contiennent des données locales / un secret) — pars des
+modèles fournis :
 
-1. **`config.toml`** — copie `config.toml.exemple` (ou crée le tien) et
-   renseigne : le chemin du CSV à lire, le dossier de sortie, les paramètres
-   Jira (email, url, projet), et la liste des ressources avec leur rôle.
+1. **`config.toml`** — copie `config.toml.exemple` et renseigne :
+   - `[jira]` : `email`, `url`, `sp_field`, `pi_field`, `projet`,
+     `prefixe_feature` (le préfixe des features à suivre, ex. `TCRE`) ;
+   - `[chemins]` : `csv` (export à lire), `dossier_sortie`, `python_exe`
+     (chemin du Python à utiliser, surtout pour le lancement Windows) ;
+   - `[ressources]` : la liste des collaborateurs et leur rôle (le nom doit être
+     **identique** à la colonne Ressource du CSV).
 
-2. **`secrets.toml`** — copie `secrets.toml.exemple` en `secrets.toml` et mets
-   ton token Jira. ⚠ **Ce fichier ne doit jamais être committé** (il est dans
-   le `.gitignore`).
+2. **`secrets.toml`** — copie `secrets.toml.exemple` et mets ton token Jira.
+   ⚠ **Ne jamais committer ce fichier** (il est dans le `.gitignore`).
 
 ## Lancer
 
@@ -34,13 +49,23 @@ des deux contenant des secrets n'est versionné — tu pars des modèles fournis
 python spii_v2.py
 ```
 
-Le script lit le CSV, interroge Jira, et écrit un fichier horodaté
-(ex. `SPII_vs_SP_2026-06-23_10h38.xlsx`) dans le dossier de sortie indiqué en
-config. Aucun fichier existant n'est modifié.
+Le script lit le CSV, interroge Jira, et écrit un fichier nommé d'après le
+projet et horodaté (ex. `SPII_vs_SP_LIEVRE_2026-06-23_10h38.xlsx`) dans le
+dossier de sortie indiqué en config. Aucun fichier existant n'est modifié ; le
+fichier généré s'ouvre automatiquement à la fin.
 
-## Installation sur Windows
+## Installation et lancement sur Windows
 
-Voir `GUIDE_WINDOWS.md` (procédure avec WinPython portable, sans droits admin).
+Sans droits admin, on utilise WinPython (Python portable). Deux scripts
+PowerShell facilitent tout :
+
+- **`initialiser.ps1`** — assistant d'installation : télécharge WinPython si
+  besoin, installe les dépendances, propose un questionnaire pour remplir la
+  config et le token, et règle l'autorisation d'exécution des scripts.
+- **`lancer.ps1`** — lance la génération (clic droit → « Exécuter avec
+  PowerShell »), en lisant le chemin Python depuis `config.toml`.
+
+Voir **`GUIDE_WINDOWS.md`** pour la procédure détaillée pas à pas.
 
 ## Ce qui n'est pas versionné
 
