@@ -109,7 +109,7 @@ function Questionnaire-Config {
     # url, sp_field et pi_field sont repris du fichier config.toml.exemple
     # (valeurs fixes pour l'instance) : on ne les redemande pas.
     $jira = @{
-        email    = Demander "Email Jira (ex. prenom.nom@imsa.msa.fr)"
+        email    = Demander "Email Jira (ex. nom.prenom@imsa.msa.fr)"
         url      = Lire-Exemple "url"      "https://imsa.atlassian.net"
         sp_field = Lire-Exemple "sp_field" "customfield_10024"
         pi_field = Lire-Exemple "pi_field" "customfield_11400"
@@ -123,7 +123,7 @@ function Questionnaire-Config {
     Info "Astuce : Maj + clic droit sur un fichier -> 'Copier en tant que chemin'."
     $chemins = @{
         csv            = (Demander "Chemin du CSV a lire - ex. C:\data\y25VUE9.csv") -replace '"', ''
-        dossier_sortie = (Demander "Dossier de sortie") -replace '"', ''
+        dossier_sortie = (Demander "Dossier de sortie - emplacement de la génération") -replace '"', ''
         python_exe     = ""
     }
 

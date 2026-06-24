@@ -58,10 +58,11 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(_BASE_DIR, "config.toml")
 SECRETS_PATH = os.path.join(_BASE_DIR, "secrets.toml")
 
-# 12 colonnes de mois : "Mois de référence" = janvier 2026, puis 2/2026 -> 12/2026
-MOIS_COLS = ["Mois de référence"] + [f"{m}/2026" for m in range(2, 13)]
-# En-têtes affichés dans les onglets : dates 01/01/2026 -> 01/12/2026
-ENTETES_MOIS = [date(2026, m, 1) for m in range(1, 13)]
+# Les colonnes de mois sont détectées dynamiquement dans le CSV (voir
+# detecter_colonnes_mois) : la 1re colonne s'appelle "Mois de référence" et est
+# suivie de 11 colonnes "M/AAAA". L'année et le mois de départ varient selon
+# l'export, donc rien n'est codé en dur.
+COL_MOIS_REF = "Mois de référence"
 
 # --- Styles openpyxl ---
 FONT_TITRE   = Font(name="Arial", size=16, bold=True, color="003366")
@@ -136,9 +137,61 @@ def _labels_cat_pourcentage():
     return dl
 
 
+def detecter_colonnes_mois(df):
+    """Détecte les 12 colonnes de mois dans le CSV et calcule leurs dates.
+
+    Le format attendu : une colonne "Mois de référence" (le mois de départ),
+    suivie de 11 colonnes "M/AAAA" (mois suivants). L'année et le mois de départ
+    varient selon l'export, donc on ne suppose rien : on lit le 2e en-tête
+    ("M/AAAA") pour en déduire le mois de référence, puis on reconstruit la
+    séquence de 12 mois.
+
+    Renvoie (mois_cols, entetes_dates) :
+      - mois_cols : les 12 noms de colonnes tels qu'ils sont dans le CSV
+      - entetes_dates : les 12 dates (1er du mois) à afficher en en-tête
+    """
+    cols = list(df.columns)
+    if COL_MOIS_REF not in cols:
+        raise ValueError(
+            f"Colonne '{COL_MOIS_REF}' introuvable dans le CSV. "
+            f"En-têtes trouvés : {cols}")
+    i0 = cols.index(COL_MOIS_REF)
+    mois_cols = cols[i0:i0 + 12]
+    if len(mois_cols) < 12:
+        raise ValueError(
+            f"Seulement {len(mois_cols)} colonne(s) de mois trouvée(s) après "
+            f"'{COL_MOIS_REF}', il en faut 12.")
+
+    # La 2e colonne (ex. "4/2025") donne le mois suivant le mois de référence.
+    # On en déduit le mois de référence puis on construit les 12 dates.
+    m = re.match(r"\s*(\d{1,2})\s*/\s*(\d{4})\s*", str(mois_cols[1]))
+    if not m:
+        raise ValueError(
+            f"Format inattendu pour la 2e colonne de mois : '{mois_cols[1]}'. "
+            f"Attendu 'M/AAAA' (ex. '4/2025').")
+    mois2, annee2 = int(m.group(1)), int(m.group(2))
+    # Mois de référence = un mois avant la 2e colonne.
+    ref_mois = mois2 - 1
+    ref_annee = annee2
+    if ref_mois == 0:
+        ref_mois, ref_annee = 12, annee2 - 1
+
+    entetes_dates = []
+    y, mth = ref_annee, ref_mois
+    for _ in range(12):
+        entetes_dates.append(date(y, mth, 1))
+        mth += 1
+        if mth == 13:
+            mth, y = 1, y + 1
+    return mois_cols, entetes_dates
+
+
 def construire_modele(csv_path, dict_param, prefixe="TCRE"):
     df = pd.read_csv(csv_path, sep=None, engine="python",
                      encoding="latin1", index_col=False)
+
+    # Colonnes de mois détectées dans CE CSV (année / mois de départ variables).
+    mois_cols, entetes_mois = detecter_colonnes_mois(df)
 
     # Regex de détection des features : <prefixe>-<numéro> (ex. TCRE-649).
     # re.escape protège un préfixe contenant d'éventuels caractères spéciaux.
@@ -165,7 +218,7 @@ def construire_modele(csv_path, dict_param, prefixe="TCRE"):
 
         livrable = str(row["Livrable"]) if pd.notna(row["Livrable"]) else ""
         match = motif_feature.search(livrable)
-        valeurs = [conv_num(row[c]) for c in MOIS_COLS]
+        valeurs = [conv_num(row[c]) for c in mois_cols]
         total_ligne = sum(valeurs)
 
         est_tcre = bool(match)
@@ -197,7 +250,8 @@ def construire_modele(csv_path, dict_param, prefixe="TCRE"):
         c["total"] += total_ligne
 
     return {"features_conso": features_conso,
-            "collab_data": collab_data, "stats": stats}
+            "collab_data": collab_data, "stats": stats,
+            "entetes_mois": entetes_mois}
 
 
 # =====================================================================
@@ -375,12 +429,12 @@ def _ajouter_legende_degrade(ws, cell_ancre):
         ws.cell(row=rr, column=c0 + 1, value=libelle)
 
 
-def _ecrire_suivi_features(wb, projet, codes_tries, features, jira):
+def _ecrire_suivi_features(wb, projet, codes_tries, features, jira, entetes_mois):
     """Onglet 'Suivi_Features_<projet>' : une ligne par feature avec PI, statut,
     consommation mensuelle et total, plus un dégradé sur le total."""
     ws_feat = wb.create_sheet("Suivi_Features_" + projet)
     ws_feat.append(["Code Feature", "Planning Interval", "Statut"]
-                   + ENTETES_MOIS + ["Total Consommé"])
+                   + entetes_mois + ["Total Consommé"])
     for code in codes_tries:
         mois = features[code]
         info = jira.get(code, {})
@@ -395,14 +449,14 @@ def _ecrire_suivi_features(wb, projet, codes_tries, features, jira):
     _ajouter_legende_degrade(ws_feat, "R2")
 
 
-def _ecrire_onglets_collaborateurs(wb, collab, jira):
+def _ecrire_onglets_collaborateurs(wb, collab, jira, entetes_mois):
     """Un onglet par collaborateur : ses lignes de consommation (avec PI inséré),
     un dégradé sur le total (hors 'Indispo DOSI ACCORDS'), une ligne TOTAL et la
     légende."""
     for nom, data in collab.items():
         ws = wb.create_sheet(nom[:31])  # limite Excel : 31 car.
         ws.append(["Projet", "Livrable d'origine", "Feature (Racine)",
-                   "Planning Interval"] + ENTETES_MOIS + ["Total"])
+                   "Planning Interval"] + entetes_mois + ["Total"])
         for r in data["rows"]:
             # r = [Projet, Livrable, Feature, 12 mois, Total]
             # On insère le Planning Interval (du TCRE) juste après la Feature.
@@ -710,6 +764,8 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     features = modele["features_conso"]
     collab = modele["collab_data"]
     stats = modele["stats"]
+    # En-têtes de mois (dates) détectés dans le CSV — pas codés en dur.
+    entetes_mois = modele.get("entetes_mois", [])
 
     # Préfixe des features (ex. "TCRE"), configurable.
     prefixe = str(cfg["jira"].get("prefixe_feature", "TCRE")).strip() or "TCRE"
@@ -728,9 +784,9 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     FONT_LIEN = Font(name="Arial", color="0563C1", underline="single")
 
     projet = cfg["jira"]["projet"]
-    _ecrire_suivi_features(wb, projet, codes_tries, features, jira)
+    _ecrire_suivi_features(wb, projet, codes_tries, features, jira, entetes_mois)
 
-    _ecrire_onglets_collaborateurs(wb, collab, jira)
+    _ecrire_onglets_collaborateurs(wb, collab, jira, entetes_mois)
 
     ws_stats = _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe,
                              codes_avec_onglet, FONT_LIEN)
