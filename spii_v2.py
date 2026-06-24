@@ -619,19 +619,29 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         # Tableau 1 : par profil (affiché en entier, y compris les profils à 0)
         ws.cell(row=4, column=1, value="Profil / Rôle")
         ws.cell(row=4, column=2, value="Consommation (Jours)")
+        ws.cell(row=4, column=3, value="%")
         profils = [("PO / SM", s["po_sm"]), ("BA", s["ba"]),
                    ("Développeurs", s["dev"]), ("QA", s["qa"])]
+        total_profils = sum(v for _, v in profils)
         for i, (lab, val) in enumerate(profils):
             ws.cell(row=5 + i, column=1, value=lab)
             ws.cell(row=5 + i, column=2, value=round(val, 3))
+            # Pourcentage de la ligne dans le total (vide si total nul)
+            pct = ws.cell(row=5 + i, column=3,
+                          value=(val / total_profils) if total_profils else 0)
+            pct.number_format = "0.0%"
         ws.cell(row=9, column=1, value="TOTAL")
-        ws.cell(row=9, column=2, value=round(sum(v for _, v in profils), 3))
-        _style_entete(ws, "A4:B4")
+        ws.cell(row=9, column=2, value=round(total_profils, 3))
+        pct_tot = ws.cell(row=9, column=3, value=1 if total_profils else 0)
+        pct_tot.number_format = "0.0%"
+        _style_entete(ws, "A4:C4")
         ws.cell(row=9, column=1).font = FONT_BOLD
         ws.cell(row=9, column=2).font = FONT_BOLD
+        ws.cell(row=9, column=3).font = FONT_BOLD
         ws.cell(row=9, column=1).fill = FILL_TOTAL
         ws.cell(row=9, column=2).fill = FILL_TOTAL
-        _bordures(ws, 4, 1, 9, 2)
+        ws.cell(row=9, column=3).fill = FILL_TOTAL
+        _bordures(ws, 4, 1, 9, 3)
 
         # Camembert 1 : par profil — sur les profils NON NULS uniquement.
         # On écrit les parts > 0 dans une zone source dédiée (colonnes V/W,
@@ -663,26 +673,34 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         ws.cell(row=12, column=1, value="Collaborateur")
         ws.cell(row=12, column=2, value="Profil")
         ws.cell(row=12, column=3, value="Consommation")
-        _style_entete(ws, "A12:C12")
+        ws.cell(row=12, column=4, value="%")
+        _style_entete(ws, "A12:D12")
         indiv = []
         for nom, cdata in collab.items():
             t = sum(rr[-1] for rr in cdata["rows"]
                     if str(rr[2]).upper() == code)
             if t > 0:
                 indiv.append((nom, cdata["role"], round(t, 3)))
+        total_indiv = sum(t for _, _, t in indiv)
         row_i = 13
         for nom, role, t in indiv:
             ws.cell(row=row_i, column=1, value=nom)
             ws.cell(row=row_i, column=2, value=role)
             ws.cell(row=row_i, column=3, value=t)
+            pct = ws.cell(row=row_i, column=4,
+                          value=(t / total_indiv) if total_indiv else 0)
+            pct.number_format = "0.0%"
             row_i += 1
         if indiv:
             ws.cell(row=row_i, column=1, value="TOTAL INDIVIDUEL").font = FONT_BOLD
             ws.cell(row=row_i, column=3,
-                    value=round(sum(t for _, _, t in indiv), 3)).font = FONT_BOLD
-            for c in range(1, 4):
+                    value=round(total_indiv, 3)).font = FONT_BOLD
+            pct_tot2 = ws.cell(row=row_i, column=4, value=1 if total_indiv else 0)
+            pct_tot2.number_format = "0.0%"
+            pct_tot2.font = FONT_BOLD
+            for c in range(1, 5):
                 ws.cell(row=row_i, column=c).fill = FILL_TOTAL
-            _bordures(ws, 12, 1, row_i, 3)
+            _bordures(ws, 12, 1, row_i, 4)
 
             # Camembert 2 : par collaborateur
             pie2 = PieChart()

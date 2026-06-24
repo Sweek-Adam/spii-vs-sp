@@ -122,7 +122,7 @@ function Questionnaire-Config {
     Write-Host "  -- Chemins --" -ForegroundColor White
     Info "Astuce : Maj + clic droit sur un fichier -> 'Copier en tant que chemin'."
     $chemins = @{
-        csv            = (Demander "Chemin du CSV a lire") -replace '"', ''
+        csv            = (Demander "Chemin du CSV a lire - ex. C:\data\y25VUE9.csv") -replace '"', ''
         dossier_sortie = (Demander "Dossier de sortie") -replace '"', ''
         python_exe     = ""
     }
