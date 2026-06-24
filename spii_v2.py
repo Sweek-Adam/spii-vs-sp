@@ -464,10 +464,12 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
 
     # --- Stats ---
     ws_stats = wb.create_sheet("Stats")
-    ws_stats.append(["Feature", "Story points", "Total consommé",
+    # Ordre : Feature, Statut, Planning Interval, puis les indicateurs.
+    ws_stats.append(["Feature", "Statut", "Planning Interval",
+                     "Story points", "Total consommé",
                      "Ratio total consommé / story points",
                      "Conso PO / SM", "Conso BA", "Conso Dévs", "Conso QA",
-                     "Titre", "Planning Interval", "Statut", "Lien Jira"])
+                     "Titre", "Lien Jira"])
     _style_entete(ws_stats, "A1:L1")
     r = 2
     # URL de base Jira (pour les liens cliquables vers chaque feature)
@@ -484,10 +486,10 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         # un entier s'affiche sans virgule (5 -> "5") et un décimal garde au
         # plus 3 chiffres (14,285714... -> 14,286).
         ratio = round(s["total"] / sp, 3) if sp else 0
-        ws_stats.append([code, sp, s["total"], ratio,
-                         s["po_sm"], s["ba"], s["dev"], s["qa"], titre, pi, statut])
-        # Format General : affichage naturel, sans virgule parasite sur les entiers.
-        ws_stats.cell(row=r, column=4).number_format = "General"
+        ws_stats.append([code, statut, pi, sp, s["total"], ratio,
+                         s["po_sm"], s["ba"], s["dev"], s["qa"], titre])
+        # Ratio en colonne F : format General (pas de virgule parasite).
+        ws_stats.cell(row=r, column=6).number_format = "General"
         # Lien interne vers l'onglet TCRE, seulement s'il existe (conso > 0)
         if code in codes_avec_onglet:
             cell = ws_stats.cell(row=r, column=1)
@@ -502,12 +504,13 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         r += 1
     derniere = r - 1
 
-    # Ligne TOTAL
+    # Ligne TOTAL — somme des colonnes numériques : Story points (D), Total (E),
+    # Conso PO/SM (G), BA (H), Dévs (I), QA (J).
     ws_stats.cell(row=r, column=1, value="TOTAL").font = FONT_BOLD
-    for col in (2, 3, 5, 6, 7, 8):
+    for col in (4, 5, 7, 8, 9, 10):
         L = get_column_letter(col)
         ws_stats.cell(row=r, column=col, value=f"=SUM({L}2:{L}{derniere})").font = FONT_BOLD
-    for c in range(1, 9):
+    for c in range(1, 11):
         ws_stats.cell(row=r, column=c).fill = FILL_TOTAL
     total_row = r
 
@@ -517,17 +520,18 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     somme_total = sum(t for _, t in sp_total_par_feature)
     moy_globale = (somme_total / somme_sp) if somme_sp else 0.0
     ws_stats.cell(row=avg_row, column=1, value="MOYENNE J/SP TYPOLOGIE").font = FONT_BOLD
-    cell_moy = ws_stats.cell(row=avg_row, column=4, value=round(moy_globale, 3))
+    # La moyenne s'affiche dans la colonne Ratio (F).
+    cell_moy = ws_stats.cell(row=avg_row, column=6, value=round(moy_globale, 3))
     cell_moy.number_format = '0.000" jour(s)"'
-    for c in range(1, 9):
+    for c in range(1, 11):
         ws_stats.cell(row=avg_row, column=c).fill = PatternFill("solid", fgColor="E1EBF5")
 
-    # Dégradé vert->rouge sur la colonne Total consommé (C), lignes de données
+    # Dégradé vert->rouge sur la colonne Total consommé (E), lignes de données
     # uniquement (on exclut les lignes TOTAL et MOYENNE en dessous).
     if derniere >= 2:
-        _appliquer_degrade(ws_stats, "C", 2, derniere)
-    # Légende des couleurs (à droite, colonne M — K/L occupées par Statut/données)
-    _ajouter_legende_degrade(ws_stats, "M2")
+        _appliquer_degrade(ws_stats, "E", 2, derniere)
+    # Légende des couleurs (à droite, colonne N — A..L occupées par le tableau).
+    _ajouter_legende_degrade(ws_stats, "N2")
 
     # --- Tableau de synthèse : moyenne jours réels par complexité (SP) ---
     start_recap = derniere + 5
@@ -573,8 +577,8 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
         scatter.y_axis.tickLblPos = "nextTo"
         scatter.x_axis.delete = False  # ne pas masquer l'axe (défaut openpyxl)
         scatter.y_axis.delete = False
-        xref = Reference(ws_stats, min_col=2, min_row=2, max_row=derniere)  # SP
-        yref = Reference(ws_stats, min_col=3, min_row=2, max_row=derniere)  # Total
+        xref = Reference(ws_stats, min_col=4, min_row=2, max_row=derniere)  # SP (col D)
+        yref = Reference(ws_stats, min_col=5, min_row=2, max_row=derniere)  # Total (col E)
         serie = Series(yref, xref, title=f"Features {prefixe}")
         serie.marker.symbol = "circle"
         serie.graphicalProperties.line.noFill = True  # points seuls, pas de ligne
