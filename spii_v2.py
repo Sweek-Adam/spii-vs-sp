@@ -711,7 +711,7 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
             pie2.add_data(data2, titles_from_data=False)
             pie2.set_categories(cats2)
             pie2.dataLabels = _labels_cat_pourcentage()
-            ws.add_chart(pie2, "E18")
+            ws.add_chart(pie2, "E22")
 
     # Ajustement automatique de la largeur des colonnes sur TOUS les onglets
     for ws in wb.worksheets:
