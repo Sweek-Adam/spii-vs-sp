@@ -49,11 +49,26 @@ modèles fournis :
 ### Format du CSV attendu
 
 Le CSV doit contenir les colonnes `Ressource`, `Projet`, `Livrable`, `Type`,
-puis une colonne **`Mois de référence`** suivie de **11 colonnes mensuelles** au
-format `M/AAAA` (ex. `4/2025`, `5/2025`, …). La période (année et mois de départ)
-est **détectée automatiquement** : pas besoin que le CSV commence en janvier ni
-sur une année précise. Les consommations doivent être de type `consomme` (les
-autres types sont ignorés).
+puis une colonne **`Mois de référence`** suivie de **colonnes mensuelles** au
+format `M/AAAA` (ex. `4/2025`, `5/2025`, …). La période (année, mois de départ et
+**nombre de mois**) est **détectée automatiquement** : pas besoin que le CSV
+commence en janvier ni qu'il couvre exactement 12 mois. Les consommations doivent
+être de type `consomme` (les autres types sont ignorés).
+
+### Fusionner plusieurs exports consécutifs (optionnel)
+
+Si tu as plusieurs exports qui se suivent dans le temps (ex. une année puis la
+suivante) et que tu veux une vue continue, le script **`fusionner_csv.py`** les
+concatène en un seul CSV :
+
+```
+python fusionner_csv.py export_2025.csv export_2026.csv -o fusion.csv
+```
+
+Donne les fichiers **du plus ancien au plus récent**. Les lignes sont reliées par
+leur clé (Ressource + Projet + Livrable + Type), et si deux exports partagent des
+mois, le plus récent l'emporte. Le fichier `fusion.csv` produit se donne ensuite
+à `spii_v2.py` comme n'importe quel CSV (il gère un nombre de mois quelconque).
 
 ## Lancer
 

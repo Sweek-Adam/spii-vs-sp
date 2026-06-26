@@ -208,7 +208,7 @@ def construire_modele(csv_path, dict_param, prefixe="TCRE"):
     # re.escape protège un préfixe contenant d'éventuels caractères spéciaux.
     motif_feature = re.compile(rf"{re.escape(prefixe)}-\d{{1,}}", re.IGNORECASE)
 
-    features_conso = {}   # code -> [12 mois]
+    features_conso = {}   # code -> [valeurs mensuelles] (nb de mois variable)
     collab_data = {}      # nom -> {role, rows, total}
     stats = {}            # code -> ventilation rôle
 
