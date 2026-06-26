@@ -445,6 +445,9 @@ def _ecrire_suivi_features(wb, projet, codes_tries, features, jira, entetes_mois
     # Dégradé vert->rouge sur la colonne Total Consommé (P, décalée par PI+Statut)
     if codes_tries:
         _appliquer_degrade(ws_feat, "P", 2, 1 + len(codes_tries))
+    # Filtre automatique sur l'en-tête + les lignes de données (A..P)
+    if codes_tries:
+        ws_feat.auto_filter.ref = f"A1:P{1 + len(codes_tries)}"
     # Légende des couleurs du dégradé (à droite du tableau, colonne R)
     _ajouter_legende_degrade(ws_feat, "R2")
 
@@ -477,6 +480,8 @@ def _ecrire_onglets_collaborateurs(wb, collab, jira, entetes_mois):
             }
             _appliquer_degrade(ws, "Q", 2, 1 + n_detail,
                                lignes_exclues=lignes_indispo)
+            # Filtre automatique sur l'en-tête + lignes détail (hors TOTAL).
+            ws.auto_filter.ref = f"A1:Q{1 + n_detail}"
 
         # Ligne TOTAL globale calculée (somme des lignes détail), affichage seul.
         if n_detail >= 1:
@@ -544,6 +549,10 @@ def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
         r += 1
     derniere = r - 1
 
+    # Filtre automatique sur l'en-tête + les lignes de données (A..L),
+    # sans les lignes TOTAL et MOYENNE qui viennent juste après.
+    if derniere >= 2:
+        ws_stats.auto_filter.ref = f"A1:L{derniere}"
     # Ligne TOTAL — somme des colonnes numériques : Story points (D), Total (E),
     # Conso PO/SM (G), BA (H), Dévs (I), QA (J).
     ws_stats.cell(row=r, column=1, value="TOTAL").font = FONT_BOLD
