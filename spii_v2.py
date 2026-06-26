@@ -448,6 +448,8 @@ def _ecrire_suivi_features(wb, projet, codes_tries, features, jira, entetes_mois
     # Filtre automatique sur l'en-tête + les lignes de données (A..P)
     if codes_tries:
         ws_feat.auto_filter.ref = f"A1:P{1 + len(codes_tries)}"
+    # Figer la ligne d'en-tête (reste visible au défilement)
+    ws_feat.freeze_panes = "A2"
     # Légende des couleurs du dégradé (à droite du tableau, colonne R)
     _ajouter_legende_degrade(ws_feat, "R2")
 
@@ -482,6 +484,8 @@ def _ecrire_onglets_collaborateurs(wb, collab, jira, entetes_mois):
                                lignes_exclues=lignes_indispo)
             # Filtre automatique sur l'en-tête + lignes détail (hors TOTAL).
             ws.auto_filter.ref = f"A1:Q{1 + n_detail}"
+        # Figer la ligne d'en-tête
+        ws.freeze_panes = "A2"
 
         # Ligne TOTAL globale calculée (somme des lignes détail), affichage seul.
         if n_detail >= 1:
@@ -553,6 +557,8 @@ def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
     # sans les lignes TOTAL et MOYENNE qui viennent juste après.
     if derniere >= 2:
         ws_stats.auto_filter.ref = f"A1:L{derniere}"
+    # Figer la ligne d'en-tête
+    ws_stats.freeze_panes = "A2"
     # Ligne TOTAL — somme des colonnes numériques : Story points (D), Total (E),
     # Conso PO/SM (G), BA (H), Dévs (I), QA (J).
     ws_stats.cell(row=r, column=1, value="TOTAL").font = FONT_BOLD
@@ -574,6 +580,35 @@ def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
     cell_moy.number_format = '0.000" jour(s)"'
     for c in range(1, 11):
         ws_stats.cell(row=avg_row, column=c).fill = PatternFill("solid", fgColor="E1EBF5")
+
+    # --- Mise en évidence des features "hors norme" sur le ratio (colonne F) ---
+    # Une feature dont le ratio jours/SP s'écarte fortement de la moyenne globale
+    # est signalée : sur-consommation (>50% au-dessus) en rouge-orangé, sous-
+    # consommation (<50% en dessous) en bleu. Aide à repérer les cas atypiques.
+    if moy_globale > 0:
+        seuil_haut = moy_globale * 1.5
+        seuil_bas = moy_globale * 0.5
+        FILL_SUR = PatternFill("solid", fgColor="FFC7CE")   # rouge clair
+        FILL_SOUS = PatternFill("solid", fgColor="BDD7EE")  # bleu clair
+        for i, (sp, total) in enumerate(sp_total_par_feature):
+            if not sp:
+                continue
+            ratio = total / sp
+            cell = ws_stats.cell(row=2 + i, column=6)
+            if ratio > seuil_haut:
+                cell.fill = FILL_SUR
+            elif ratio < seuil_bas:
+                cell.fill = FILL_SOUS
+        # Petite légende sous la légende du dégradé (colonne N)
+        ws_stats.cell(row=6, column=14, value="Ratio vs moyenne :").font = FONT_BOLD
+        c_sur = ws_stats.cell(row=7, column=14)
+        c_sur.fill = FILL_SUR
+        c_sur.border = BORDER_ALL
+        ws_stats.cell(row=7, column=15, value="Sur-consommation (> +50%)")
+        c_sous = ws_stats.cell(row=8, column=14)
+        c_sous.fill = FILL_SOUS
+        c_sous.border = BORDER_ALL
+        ws_stats.cell(row=8, column=15, value="Sous-consommation (< -50%)")
 
     # Dégradé vert->rouge sur la colonne Total consommé (E), lignes de données
     # uniquement (on exclut les lignes TOTAL et MOYENNE en dessous).
@@ -766,6 +801,50 @@ def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
             ws.add_chart(pie2, "E22")
 
 
+def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
+                     collab, entetes_mois, font_lien):
+    """Onglet de garde : titre, infos de génération (date, projet, période),
+    quelques chiffres clés et des liens vers les onglets principaux."""
+    ws = wb.create_sheet("Sommaire")
+
+    ws.cell(row=1, column=1, value=f"Suivi de consommation — {projet}").font = FONT_TITRE
+    ws.row_dimensions[1].height = 30
+
+    periode = ""
+    if entetes_mois:
+        periode = (f"{entetes_mois[0].strftime('%m/%Y')} → "
+                   f"{entetes_mois[-1].strftime('%m/%Y')}")
+
+    infos = [
+        ("Généré le", datetime.now().strftime("%d/%m/%Y à %Hh%M")),
+        ("Projet Jira", projet),
+        ("Préfixe des features", prefixe),
+        ("Période couverte", periode),
+        (f"Nombre de features ({prefixe})", len(codes_tries)),
+        ("Features avec onglet dédié", len(codes_avec_onglet)),
+        ("Collaborateurs", len(collab)),
+    ]
+    r = 3
+    for libelle, valeur in infos:
+        ws.cell(row=r, column=1, value=libelle).font = FONT_BOLD
+        ws.cell(row=r, column=2, value=valeur)
+        r += 1
+
+    # Liens vers les onglets principaux
+    r += 1
+    ws.cell(row=r, column=1, value="Accès rapide :").font = FONT_BOLD
+    r += 1
+    liens = [("Statistiques de synthèse", "Stats"),
+             ("Suivi par feature", "Suivi_Features_" + projet)]
+    for libelle, onglet in liens:
+        c = ws.cell(row=r, column=1, value=f"→ {libelle}")
+        c.hyperlink = f"#'{onglet}'!A1"
+        c.font = font_lien
+        r += 1
+
+    return ws
+
+
 def ecrire_classeur(modele, jira, sortie_path, cfg):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
@@ -802,15 +881,22 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
 
     _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, FONT_LIEN)
 
+    # Onglet sommaire (créé en dernier, placé en premier ci-dessous)
+    ws_sommaire = _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries,
+                                   codes_avec_onglet, collab, entetes_mois,
+                                   FONT_LIEN)
+
     # Ajustement automatique de la largeur des colonnes sur TOUS les onglets
     for ws in wb.worksheets:
         _ajuster_colonnes(ws)
 
-    # Placer l'onglet Stats en première position
+    # Ordre des onglets : Sommaire en 1er, puis Stats, puis le reste.
     if "Stats" in wb.sheetnames:
         wb._sheets.remove(ws_stats)
         wb._sheets.insert(0, ws_stats)
-        wb.active = 0  # onglet actif à l'ouverture = Stats
+    wb._sheets.remove(ws_sommaire)
+    wb._sheets.insert(0, ws_sommaire)
+    wb.active = 0  # onglet actif à l'ouverture = Sommaire
 
     wb.save(sortie_path)
 
@@ -842,25 +928,64 @@ def ouvrir_fichier(chemin):
         print(f"   Ouvre le fichier manuellement : {chemin}")
 
 
-def main():
-    cfg = charger_config()
-    token = cfg["jira"]["api_token"]
-    # Placeholders connus (config exemple / questionnaire) = token non renseigné.
+def valider_config(cfg):
+    """Vérifie la config AVANT tout traitement et renvoie la liste des problèmes
+    (chaînes lisibles). Une liste vide = tout est bon. Le but est d'échouer tôt
+    avec des messages clairs, plutôt que de planter au milieu du traitement.
+    """
+    erreurs = []
+    jira = cfg.get("jira", {})
+    chemins = cfg.get("chemins", {})
+
+    # --- Token Jira ---
     placeholders = {"REMPLACE_PAR_TON_TOKEN", "REMPLACE_PAR_TON_NOUVEAU_TOKEN",
                     "colle_ton_token_ici"}
+    token = jira.get("api_token", "")
     if not token or token in placeholders:
-        print(f"❌ Token Jira manquant dans {SECRETS_PATH}")
+        erreurs.append(f"Token Jira manquant ou non renseigné dans {SECRETS_PATH}")
+
+    # --- Champs Jira indispensables ---
+    for champ in ("email", "url", "projet", "sp_field"):
+        if not str(jira.get(champ, "")).strip():
+            erreurs.append(f"Champ [jira].{champ} vide dans config.toml")
+
+    # --- Ressources (équipe) ---
+    if not cfg.get("ressources"):
+        erreurs.append("Aucune ressource (équipe) définie dans [ressources] "
+                       "de config.toml")
+
+    # --- CSV ---
+    csv_brut = chemins.get("csv", "")
+    if not str(csv_brut).strip():
+        erreurs.append("Champ [chemins].csv vide dans config.toml")
+    else:
+        csv_path = os.path.normpath(csv_brut)
+        if not os.path.exists(csv_path):
+            erreurs.append(f"CSV introuvable : {csv_path}")
+
+    # --- Dossier de sortie ---
+    if not str(chemins.get("dossier_sortie", "")).strip():
+        erreurs.append("Champ [chemins].dossier_sortie vide dans config.toml")
+
+    return erreurs
+
+
+def main():
+    cfg = charger_config()
+
+    # Validation préalable : on échoue tôt avec des messages clairs.
+    problemes = valider_config(cfg)
+    if problemes:
+        print("❌ Configuration incomplète ou invalide :")
+        for p in problemes:
+            print(f"   - {p}")
+        print("\n   Corrige config.toml / secrets.toml puis relance.")
         return
 
     dict_param = {str(n).strip().upper(): str(r).strip()
                   for n, r in cfg.get("ressources", {}).items()}
     # normpath : tolère les séparateurs / ou \ quelle que soit la plateforme
     csv_path = os.path.normpath(cfg["chemins"]["csv"])
-
-    if not os.path.exists(csv_path):
-        print(f"❌ CSV introuvable : {csv_path}")
-        print("   Vérifie le chemin 'csv' dans config.toml.")
-        return
 
     # Dossier de sortie (depuis la config), créé s'il n'existe pas.
     dossier_sortie = os.path.normpath(cfg["chemins"]["dossier_sortie"])
@@ -890,6 +1015,31 @@ def main():
     print(f"Écriture du classeur openpyxl -> {os.path.basename(sortie)}...")
     chrono("Écriture openpyxl",
            lambda: ecrire_classeur(modele, jira, sortie, cfg))
+
+    # --- Récapitulatif ---
+    stats = modele["stats"]
+    nb_features = len(codes)
+    nb_avec_onglet = sum(1 for c in codes if stats.get(c, {}).get("total", 0) > 0)
+    nb_collab = len(modele["collab_data"])
+    # Features dont le titre Jira n'a pas été récupéré (code absent de Jira,
+    # ou souci de connexion) : utile à repérer.
+    titres_manquants = [c for c in codes
+                        if jira.get(c, {}).get("titre", "") in
+                        ("", "Titre introuvable", "Sans titre")]
+    entetes = modele.get("entetes_mois", [])
+    periode = ""
+    if entetes:
+        periode = f"{entetes[0].strftime('%m/%Y')} -> {entetes[-1].strftime('%m/%Y')}"
+
+    print("\n--- Récapitulatif ---")
+    print(f"   Période couverte    : {periode}")
+    print(f"   Features détectées  : {nb_features}  (dont {nb_avec_onglet} avec onglet dédié)")
+    print(f"   Collaborateurs      : {nb_collab}")
+    if titres_manquants:
+        apercu = ", ".join(titres_manquants[:5])
+        suite = " ..." if len(titres_manquants) > 5 else ""
+        print(f"   ⚠ Titres Jira non trouvés ({len(titres_manquants)}) : {apercu}{suite}")
+        print(f"     (codes absents de Jira, ou problème de connexion/token ?)")
 
     print(f"\n✅ Terminé : {sortie}")
 
