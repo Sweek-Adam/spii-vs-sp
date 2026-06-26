@@ -138,17 +138,18 @@ def _labels_cat_pourcentage():
 
 
 def detecter_colonnes_mois(df):
-    """Détecte les 12 colonnes de mois dans le CSV et calcule leurs dates.
+    """Détecte les colonnes de mois dans le CSV et calcule leurs dates.
 
     Le format attendu : une colonne "Mois de référence" (le mois de départ),
-    suivie de 11 colonnes "M/AAAA" (mois suivants). L'année et le mois de départ
-    varient selon l'export, donc on ne suppose rien : on lit le 2e en-tête
-    ("M/AAAA") pour en déduire le mois de référence, puis on reconstruit la
-    séquence de 12 mois.
+    suivie d'une ou plusieurs colonnes "M/AAAA" (mois suivants). Le nombre de
+    mois est variable (12 pour un export standard, davantage pour un CSV fusionné
+    couvrant plusieurs périodes). On lit la 2e colonne ("M/AAAA") pour déduire le
+    mois de référence, puis on reconstruit la séquence sur autant de mois qu'il y
+    a de colonnes mensuelles consécutives.
 
     Renvoie (mois_cols, entetes_dates) :
-      - mois_cols : les 12 noms de colonnes tels qu'ils sont dans le CSV
-      - entetes_dates : les 12 dates (1er du mois) à afficher en en-tête
+      - mois_cols : les noms de colonnes de mois tels qu'ils sont dans le CSV
+      - entetes_dates : les dates (1er du mois) à afficher en en-tête
     """
     cols = list(df.columns)
     if COL_MOIS_REF not in cols:
@@ -156,14 +157,24 @@ def detecter_colonnes_mois(df):
             f"Colonne '{COL_MOIS_REF}' introuvable dans le CSV. "
             f"En-têtes trouvés : {cols}")
     i0 = cols.index(COL_MOIS_REF)
-    mois_cols = cols[i0:i0 + 12]
-    if len(mois_cols) < 12:
+
+    # On part de "Mois de référence" et on prend toutes les colonnes "M/AAAA"
+    # consécutives qui suivent (on s'arrête à la 1re colonne non mensuelle).
+    motif_mois = re.compile(r"^\s*\d{1,2}\s*/\s*\d{4}\s*$")
+    mois_cols = [cols[i0]]  # "Mois de référence" = 1er mois
+    for c in cols[i0 + 1:]:
+        if motif_mois.match(str(c)):
+            mois_cols.append(c)
+        else:
+            break
+    if len(mois_cols) < 2:
         raise ValueError(
-            f"Seulement {len(mois_cols)} colonne(s) de mois trouvée(s) après "
-            f"'{COL_MOIS_REF}', il en faut 12.")
+            f"Aucune colonne de mois 'M/AAAA' trouvée après '{COL_MOIS_REF}'. "
+            f"En-têtes : {cols}")
+    n_mois = len(mois_cols)
 
     # La 2e colonne (ex. "4/2025") donne le mois suivant le mois de référence.
-    # On en déduit le mois de référence puis on construit les 12 dates.
+    # On en déduit le mois de référence puis on construit les dates.
     m = re.match(r"\s*(\d{1,2})\s*/\s*(\d{4})\s*", str(mois_cols[1]))
     if not m:
         raise ValueError(
@@ -178,7 +189,7 @@ def detecter_colonnes_mois(df):
 
     entetes_dates = []
     y, mth = ref_annee, ref_mois
-    for _ in range(12):
+    for _ in range(n_mois):
         entetes_dates.append(date(y, mth, 1))
         mth += 1
         if mth == 13:
@@ -220,13 +231,14 @@ def construire_modele(csv_path, dict_param, prefixe="TCRE"):
         match = motif_feature.search(livrable)
         valeurs = [conv_num(row[c]) for c in mois_cols]
         total_ligne = sum(valeurs)
+        n_mois = len(mois_cols)
 
         est_tcre = bool(match)
         code = match.group(0).upper() if est_tcre else ""
 
         if est_tcre:
-            features_conso.setdefault(code, [0.0] * 12)
-            for i in range(12):
+            features_conso.setdefault(code, [0.0] * n_mois)
+            for i in range(n_mois):
                 features_conso[code][i] += valeurs[i]
             s = stats.setdefault(code, {"total": 0.0, "po_sm": 0.0,
                                         "ba": 0.0, "dev": 0.0, "qa": 0.0})
@@ -441,38 +453,52 @@ def _ecrire_suivi_features(wb, projet, codes_tries, features, jira, entetes_mois
         pi = info.get("pi", "")
         statut = info.get("statut", "")
         ws_feat.append([code, pi, statut] + mois + [sum(mois)])
-    _style_entete(ws_feat, "A1:P1")
-    # Dégradé vert->rouge sur la colonne Total Consommé (P, décalée par PI+Statut)
+    # Positions calculées selon le nombre de mois : 3 colonnes fixes (Code, PI,
+    # Statut) + N mois + 1 colonne Total.
+    n_mois = len(entetes_mois)
+    col_total = 3 + n_mois + 1
+    L_total = get_column_letter(col_total)
+    derniere_ligne = 1 + len(codes_tries)
+    _style_entete(ws_feat, f"A1:{L_total}1")
+    # Dégradé vert->rouge sur la colonne Total Consommé
     if codes_tries:
-        _appliquer_degrade(ws_feat, "P", 2, 1 + len(codes_tries))
-    # Filtre automatique sur l'en-tête + les lignes de données (A..P)
+        _appliquer_degrade(ws_feat, L_total, 2, derniere_ligne)
+    # Filtre automatique sur l'en-tête + les lignes de données
     if codes_tries:
-        ws_feat.auto_filter.ref = f"A1:P{1 + len(codes_tries)}"
+        ws_feat.auto_filter.ref = f"A1:{L_total}{derniere_ligne}"
     # Figer la ligne d'en-tête (reste visible au défilement)
     ws_feat.freeze_panes = "A2"
-    # Légende des couleurs du dégradé (à droite du tableau, colonne R)
-    _ajouter_legende_degrade(ws_feat, "R2")
+    # Légende des couleurs du dégradé (2 colonnes après le Total)
+    L_legende = get_column_letter(col_total + 2)
+    _ajouter_legende_degrade(ws_feat, f"{L_legende}2")
 
 
 def _ecrire_onglets_collaborateurs(wb, collab, jira, entetes_mois):
     """Un onglet par collaborateur : ses lignes de consommation (avec PI inséré),
     un dégradé sur le total (hors 'Indispo DOSI ACCORDS'), une ligne TOTAL et la
     légende."""
+    n_mois = len(entetes_mois)
+    # Positions : Projet(1), Livrable(2), Feature(3), PI(4), N mois, Total.
+    col_total = 4 + n_mois + 1
+    L_total = get_column_letter(col_total)
+    col_role_lib = col_total + 2      # "Rôle :"
+    col_role_val = col_total + 3      # valeur du rôle
+    L_legende = get_column_letter(col_total + 2)
     for nom, data in collab.items():
         ws = wb.create_sheet(nom[:31])  # limite Excel : 31 car.
         ws.append(["Projet", "Livrable d'origine", "Feature (Racine)",
                    "Planning Interval"] + entetes_mois + ["Total"])
         for r in data["rows"]:
-            # r = [Projet, Livrable, Feature, 12 mois, Total]
+            # r = [Projet, Livrable, Feature, N mois, Total]
             # On insère le Planning Interval (du TCRE) juste après la Feature.
             code_feat = str(r[2]).upper()
             pi = jira.get(code_feat, {}).get("pi", "")
             ws.append(r[:3] + [pi] + r[3:])
-        _style_entete(ws, "A1:Q1")  # une colonne de plus (Q au lieu de P)
-        # Rôle en S1 (colonne 19, décalé de +1)
-        ws.cell(row=1, column=18, value="Rôle :").font = FONT_BOLD
-        ws.cell(row=1, column=19, value=data["role"])
-        # Dégradé vert->rouge sur la colonne Total (Q maintenant) — lignes détail.
+        _style_entete(ws, f"A1:{L_total}1")
+        # Rôle à droite du tableau
+        ws.cell(row=1, column=col_role_lib, value="Rôle :").font = FONT_BOLD
+        ws.cell(row=1, column=col_role_val, value=data["role"])
+        # Dégradé vert->rouge sur la colonne Total — lignes détail.
         # On exclut les lignes "Indispo DOSI ACCORDS".
         n_detail = len(data["rows"])
         if n_detail >= 1:
@@ -480,31 +506,31 @@ def _ecrire_onglets_collaborateurs(wb, collab, jira, entetes_mois):
                 2 + i for i, r in enumerate(data["rows"])
                 if str(r[0]).strip() == "Indispo DOSI ACCORDS"
             }
-            _appliquer_degrade(ws, "Q", 2, 1 + n_detail,
+            _appliquer_degrade(ws, L_total, 2, 1 + n_detail,
                                lignes_exclues=lignes_indispo)
             # Filtre automatique sur l'en-tête + lignes détail (hors TOTAL).
-            ws.auto_filter.ref = f"A1:Q{1 + n_detail}"
+            ws.auto_filter.ref = f"A1:{L_total}{1 + n_detail}"
         # Figer la ligne d'en-tête
         ws.freeze_panes = "A2"
 
         # Ligne TOTAL globale calculée (somme des lignes détail), affichage seul.
         if n_detail >= 1:
             row_total = 2 + n_detail
-            # Somme colonne par colonne : 12 mois + Total (cols E..Q = idx 4..16)
-            sommes = [0.0] * 13  # 12 mois + total
+            # Somme colonne par colonne : N mois + Total.
+            sommes = [0.0] * (n_mois + 1)
             for r in data["rows"]:
-                for j in range(13):           # r[3..15] = 12 mois + total
+                for j in range(n_mois + 1):       # r[3 .. 3+n_mois] = mois + total
                     sommes[j] += conv_num(r[3 + j])
             ws.cell(row=row_total, column=1, value="TOTAL").font = FONT_BOLD
-            # Les valeurs commencent en colonne E (5) à cause de la col PI insérée
+            # Les valeurs commencent en colonne 5 (E) à cause de la col PI insérée
             for j, val in enumerate(sommes):
                 c = ws.cell(row=row_total, column=5 + j, value=round(val, 3))
                 c.font = FONT_BOLD
-            for col in range(1, 18):          # fond gris clair sur A..Q
+            for col in range(1, col_total + 1):   # fond gris clair sur A..Total
                 ws.cell(row=row_total, column=col).fill = FILL_TOTAL
 
         # Légende des couleurs du dégradé (colonne S, sous le "Rôle")
-        _ajouter_legende_degrade(ws, "S3")
+        _ajouter_legende_degrade(ws, f"{L_legende}3")
 
 
 def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
@@ -640,6 +666,21 @@ def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
         ws_stats.cell(row=rr, column=1, value=sp_val)
         ws_stats.cell(row=rr, column=2, value=round(moyenne, 2)).number_format = '0.00'
         ws_stats.cell(row=rr, column=3, value=len(totaux))
+
+    # Ligne de synthèse : moyenne pondérée par le nombre de features (= somme de
+    # tous les jours / nombre total de features) et total des features.
+    if par_sp:
+        tous_totaux = [t for totaux in par_sp.values() for t in totaux]
+        nb_total = len(tous_totaux)
+        moy_ponderee = sum(tous_totaux) / nb_total if nb_total else 0
+        rr = recap_first + len(par_sp)
+        ws_stats.cell(row=rr, column=1, value="MOYENNE").font = FONT_BOLD
+        c_moy = ws_stats.cell(row=rr, column=2, value=round(moy_ponderee, 2))
+        c_moy.number_format = '0.00'
+        c_moy.font = FONT_BOLD
+        ws_stats.cell(row=rr, column=3, value=nb_total).font = FONT_BOLD
+        for c in range(1, 4):
+            ws_stats.cell(row=rr, column=c).fill = FILL_TOTAL
 
     # --- Graphique nuage de points : SP (X) vs Total consommé (Y), 1 point/feature ---
     if derniere >= 2:
