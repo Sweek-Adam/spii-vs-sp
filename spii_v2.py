@@ -666,6 +666,10 @@ def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
         serie.marker.symbol = "circle"
         serie.graphicalProperties.line.noFill = True  # points seuls, pas de ligne
         scatter.series.append(serie)
+        # Tous les points forment un seul groupe : la légende n'apporterait que
+        # du bruit (openpyxl y listerait des valeurs parasites). On la retire :
+        # le titre du graphique "Features <prefixe> : ..." suffit à l'identifier.
+        scatter.legend = None
         ws_stats.add_chart(scatter, f"E{start_recap}")
 
     return ws_stats
