@@ -16,6 +16,9 @@ Il produit :
 - un onglet **par feature** (conso > 0) : tableaux par profil et par
   collaborateur (jours **et %**) avec camemberts, et liens de navigation.
 
+Les tableaux principaux (Stats, Suivi_Features, collaborateurs) ont des **filtres
+automatiques** sur leurs en-têtes pour trier et filtrer facilement.
+
 Le tout via **openpyxl** (pas besoin qu'Excel soit ouvert, multiplateforme
 Mac/Windows).
 
@@ -42,6 +45,15 @@ modèles fournis :
 
 2. **`secrets.toml`** — copie `secrets.toml.exemple` et mets ton token Jira.
    ⚠ **Ne jamais committer ce fichier** (il est dans le `.gitignore`).
+
+### Format du CSV attendu
+
+Le CSV doit contenir les colonnes `Ressource`, `Projet`, `Livrable`, `Type`,
+puis une colonne **`Mois de référence`** suivie de **11 colonnes mensuelles** au
+format `M/AAAA` (ex. `4/2025`, `5/2025`, …). La période (année et mois de départ)
+est **détectée automatiquement** : pas besoin que le CSV commence en janvier ni
+sur une année précise. Les consommations doivent être de type `consomme` (les
+autres types sont ignorés).
 
 ## Lancer
 

@@ -86,10 +86,11 @@ Concrètement, le script automatise presque tout le reste de ce guide :
 - télécharge WinPython s'il est absent (Python portable, sans admin) ;
 - installe les dépendances Python ;
 - **propose un questionnaire** pour remplir `config.toml` et `secrets.toml`
-  (email Jira, clé projet, chemins, équipe membre par membre, token) — l'URL
-  Jira, les identifiants de champs et le préfixe de feature sont repris du
-  fichier exemple, pas redemandés. Tu peux passer le questionnaire et éditer à
-  la main si tu préfères ;
+  (email Jira, clé projet, préfixe de feature, chemins, équipe membre par membre,
+  token) — l'URL Jira et les identifiants de champs sont repris du fichier
+  exemple, pas redemandés. Le préfixe de feature est demandé avec « TCRE » comme
+  valeur par défaut. Tu peux passer le questionnaire et éditer à la main si tu
+  préfères ;
 - renseigne le chemin Python dans `config.toml` ;
 - règle l'autorisation d'exécution des scripts PowerShell ;
 - affiche un récapitulatif et la liste de ce qu'il te reste à faire à la main.
