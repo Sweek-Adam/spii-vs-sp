@@ -108,15 +108,16 @@ function Questionnaire-Config {
     Write-Host "  -- Jira --" -ForegroundColor White
     # url, sp_field et pi_field sont repris du fichier config.toml.exemple
     # (valeurs fixes pour l'instance) : on ne les redemande pas.
+    # Le prefixe de feature est demande (defaut TCRE).
     $jira = @{
-        email    = Demander "Email Jira (ex. nom.prenom@imsa.msa.fr)"
+        email    = Demander "Email Jira (ex. prenom.nom@imsa.msa.fr)"
         url      = Lire-Exemple "url"      "https://imsa.atlassian.net"
         sp_field = Lire-Exemple "sp_field" "customfield_10024"
         pi_field = Lire-Exemple "pi_field" "customfield_11400"
-        projet   = Demander "Cle projet (ex. LIEVRE)" "LIEVRE"
-        prefixe_feature = Lire-Exemple "prefixe_feature" "TCRE"
+        projet   = Demander "Cle projet (Si vous laissez vide la valeur par défaut est LIEVRE)" "LIEVRE"
+        prefixe_feature = Demander "Prefixe des features (Si vous laissez vide la valeur par défaut est TCRE)" "TCRE"
     }
-    Info ("url / sp_field / pi_field / prefixe repris de l'exemple : {0}, {1}, {2}, {3}" -f $jira.url, $jira.sp_field, $jira.pi_field, $jira.prefixe_feature)
+    Info ("url / sp_field / pi_field repris de l'exemple : {0}, {1}, {2}" -f $jira.url, $jira.sp_field, $jira.pi_field)
 
     Write-Host ""
     Write-Host "  -- Chemins --" -ForegroundColor White
