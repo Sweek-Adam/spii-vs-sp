@@ -851,9 +851,10 @@ def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
         ws.cell(row=12, column=4, value="%")
         _style_entete(ws, "A12:D12")
         indiv = []
+        code_norm = str(code).upper()
         for nom, cdata in collab.items():
             t = sum(rr[-1] for rr in cdata["rows"]
-                    if str(rr[2]).upper() == code)
+                    if str(rr[2]).upper() == code_norm)
             if t > 0:
                 indiv.append((nom, cdata["role"], round(t, 3)))
         total_indiv = sum(t for _, _, t in indiv)
