@@ -16,6 +16,12 @@ Il produit :
 - un onglet **par feature** (conso > 0) : tableaux par profil et par
   collaborateur (jours **et %**) avec camemberts, et liens de navigation.
 
+En plus des features `<prefixe>-xxx`, certaines **catégories nommées** repérées
+dans le libellé du livrable (« Correction SOLAU », « Analyse N2 ») reçoivent leur
+propre onglet détaillé, avec le même contenu (profils, collaborateurs, %,
+camemberts). La liste de ces catégories est définie en haut de `spii_v2.py`
+(`CATEGORIES_LIVRABLE`) et facile à étendre.
+
 Les tableaux principaux (Stats, Suivi_Features, collaborateurs) ont des **filtres
 automatiques** sur leurs en-têtes pour trier et filtrer facilement.
 

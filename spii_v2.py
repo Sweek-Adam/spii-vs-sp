@@ -197,6 +197,25 @@ def detecter_colonnes_mois(df):
     return mois_cols, entetes_dates
 
 
+# Catégories nommées (hors features <prefixe>-xxx) qui méritent leur propre
+# onglet détaillé, repérées par un motif dans le libellé du livrable.
+# Chaque entrée : (libellé affiché / nom d'onglet, regex insensible à la casse).
+# Extensible : ajoute une ligne pour une nouvelle catégorie.
+CATEGORIES_LIVRABLE = [
+    ("Correction SOLAU", re.compile(r"SOLAU", re.IGNORECASE)),
+    ("Analyse N2", re.compile(r"Analyse\s*N2", re.IGNORECASE)),
+]
+
+
+def _categorie_livrable(livrable):
+    """Renvoie le nom de catégorie si le libellé correspond à l'une des
+    CATEGORIES_LIVRABLE, sinon une chaîne vide."""
+    for nom, motif in CATEGORIES_LIVRABLE:
+        if motif.search(livrable):
+            return nom
+    return ""
+
+
 def construire_modele(csv_path, dict_param, prefixe="TCRE"):
     df = pd.read_csv(csv_path, sep=None, engine="python",
                      encoding="latin1", index_col=False)
@@ -233,10 +252,21 @@ def construire_modele(csv_path, dict_param, prefixe="TCRE"):
         total_ligne = sum(valeurs)
         n_mois = len(mois_cols)
 
+        # Détermination du "code" qui regroupe la ligne et lui donne un onglet :
+        #  - soit une feature <prefixe>-xxx (ex. TCRE-649) ;
+        #  - soit une catégorie nommée détectée dans le libellé (SOLAU,
+        #    Analyse N2...), traitée comme une pseudo-feature (même rendu).
         est_tcre = bool(match)
-        code = match.group(0).upper() if est_tcre else ""
-
         if est_tcre:
+            code = match.group(0).upper()
+        else:
+            code = _categorie_livrable(livrable)  # "" si aucune catégorie
+
+        # Une ligne est "ventilée" (onglet + stats par profil) si c'est un TCRE
+        # ou une catégorie reconnue.
+        a_onglet = est_tcre or bool(code)
+
+        if a_onglet:
             features_conso.setdefault(code, [0.0] * n_mois)
             for i in range(n_mois):
                 features_conso[code][i] += valeurs[i]
@@ -255,9 +285,9 @@ def construire_modele(csv_path, dict_param, prefixe="TCRE"):
         nom_onglet = ressource[:30]
         c = collab_data.setdefault(nom_onglet, {"role": dict_param[ressource_maj],
                                                 "rows": [], "total": 0.0})
-        # Les lignes "TOTAL" du CSV ont déjà été exclues plus haut, donc une
-        # ligne non-TCRE est forcément une vraie ligne hors feature.
-        feat_root = code if est_tcre else "Autre / Hors Feature"
+        # Les lignes "TOTAL" du CSV ont déjà été exclues plus haut.
+        # feat_root = le code (TCRE ou catégorie) si ventilé, sinon "hors feature".
+        feat_root = code if a_onglet else "Autre / Hors Feature"
         c["rows"].append([row["Projet"], livrable, feat_root] + valeurs + [total_ligne])
         c["total"] += total_ligne
 
@@ -297,7 +327,16 @@ def recuperer_jira(tcre_list, cfg):
             return str(brut.get("value") or brut.get("name") or "").strip()
         return str(brut).strip()
 
+    # Un vrai code Jira ressemble à "ABC-123". Les catégories nommées
+    # (ex. "Correction SOLAU") n'en sont pas : on ne les interroge pas.
+    motif_code_jira = re.compile(r"^[A-Za-z]+-\d+$")
+
     def un_tcre(tcre):
+        # Pseudo-feature (catégorie) : pas un ticket Jira. On renvoie son nom
+        # comme titre, sans SP ni PI ni statut.
+        if not motif_code_jira.match(str(tcre).strip()):
+            return tcre, {"titre": tcre, "sp": 0.0, "pi": "", "statut": ""}
+
         titre = "Titre introuvable"
         pi = ""
         statut = ""
@@ -570,8 +609,9 @@ def _ecrire_stats(wb, codes_tries, stats, jira, cfg, prefixe, codes_avec_onglet,
             cell = ws_stats.cell(row=r, column=1)
             cell.hyperlink = f"#'{code}'!A1"
             cell.font = font_lien
-        # Lien cliquable vers la page Jira de la feature (colonne L)
-        if url_base_jira:
+        # Lien cliquable vers la page Jira de la feature (colonne L).
+        # Uniquement pour un vrai code Jira (ABC-123), pas pour une catégorie.
+        if url_base_jira and re.match(r"^[A-Za-z]+-\d+$", str(code)):
             cell_jira = ws_stats.cell(row=r, column=12, value="Ouvrir ↗")
             cell_jira.hyperlink = f"{url_base_jira}/browse/{code}"
             cell_jira.font = font_lien
@@ -727,8 +767,10 @@ def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
         titre = jira.get(code, {}).get("titre", "")
         ws = wb.create_sheet(code)
 
-        # Titre
-        ws.cell(row=1, column=1, value=f"{code} - {titre}").font = FONT_TITRE
+        # Titre : "CODE - titre", sauf si le titre est identique au code
+        # (cas des catégories nommées) où l'on n'affiche le nom qu'une fois.
+        titre_affiche = code if (not titre or titre == code) else f"{code} - {titre}"
+        ws.cell(row=1, column=1, value=titre_affiche).font = FONT_TITRE
         ws.row_dimensions[1].height = 30
 
         # Planning Interval (ligne 2, entre le titre et le lien retour)
@@ -741,9 +783,10 @@ def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
         lien.hyperlink = "#'Stats'!A1"
         lien.font = font_lien
 
-        # Lien vers la page Jira du TCRE (ligne 3, colonne B, à droite du retour)
+        # Lien vers la page Jira du code (ligne 3, colonne B) — seulement pour
+        # un vrai code Jira (ABC-123), pas pour une catégorie nommée.
         url_base = str(cfg["jira"].get("url", "")).rstrip("/")
-        if url_base:
+        if url_base and re.match(r"^[A-Za-z]+-\d+$", str(code)):
             lien_jira = ws.cell(row=3, column=2, value="Ouvrir dans Jira ↗")
             lien_jira.hyperlink = f"{url_base}/browse/{code}"
             lien_jira.font = font_lien
