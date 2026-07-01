@@ -174,10 +174,28 @@ def charger_absences(file_path, feuilles=None):
         columns={"Absence": "Total absences", "Présence": "Total présences"}
     ).sort_values(["Groupe_Periode"])
 
+    # Dates de début / fin observées (1er et dernier jour ouvré avec activité)
+    # par groupe de période (PI) et par sous-période (itération).
+    bornes_pi = (df.groupby("Groupe_Periode")["Date"].agg(["min", "max"])
+                 .to_dict("index"))
+    bornes_periode = (df.groupby("Periode")["Date"].agg(["min", "max"])
+                      .to_dict("index"))
+
+    # On ajoute les colonnes Début / Fin au tableau par_pi.
+    par_pi["Début"] = par_pi["Groupe_Periode"].map(
+        lambda g: bornes_pi.get(g, {}).get("min"))
+    par_pi["Fin"] = par_pi["Groupe_Periode"].map(
+        lambda g: bornes_pi.get(g, {}).get("max"))
+    # Réordonner : PI, Début, Fin, puis les totaux.
+    par_pi = par_pi[["Groupe_Periode", "Début", "Fin",
+                     "Total absences", "Total présences"]]
+
     return {
         "par_personne_periode": par_personne_periode,
         "total_annuel": total_annuel,
         "par_pi": par_pi,
+        "bornes_pi": bornes_pi,           # {PI: {'min': date, 'max': date}}
+        "bornes_periode": bornes_periode,  # {sous-période: {'min':.., 'max':..}}
         "brut": df,
     }
 

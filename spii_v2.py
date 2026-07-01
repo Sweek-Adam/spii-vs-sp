@@ -941,7 +941,8 @@ def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
         c.font = font_lien
         r += 1
 
-    # Deux colonnes de liens : collaborateurs (col A) et features (col C-D).
+    # Colonnes de liens : collaborateurs (A), groupes de période PI (C),
+    # puis features (E-F).
     r_debut = r + 2
     # -- Colonne collaborateurs --
     ws.cell(row=r_debut, column=1, value="Onglets collaborateurs").font = FONT_BOLD
@@ -954,35 +955,35 @@ def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
         c.font = font_lien
         rc += 1
 
+    # -- Colonne groupes de période (PI), à gauche des features --
+    if onglets_pi:
+        ws.cell(row=r_debut, column=3, value="Groupes de période (PI)").font = FONT_BOLD
+        _style_entete(ws, f"C{r_debut}:C{r_debut}")
+        rp = r_debut + 1
+        for libelle, onglet in onglets_pi:
+            c = ws.cell(row=rp, column=3, value=libelle)
+            c.hyperlink = f"#'{onglet}'!A1"
+            c.font = font_lien
+            rp += 1
+
     # -- Colonnes features (code + titre) --
-    ws.cell(row=r_debut, column=3, value="Onglet feature").font = FONT_BOLD
-    ws.cell(row=r_debut, column=4, value="Titre").font = FONT_BOLD
-    _style_entete(ws, f"C{r_debut}:D{r_debut}")
+    ws.cell(row=r_debut, column=5, value="Onglet feature").font = FONT_BOLD
+    ws.cell(row=r_debut, column=6, value="Titre").font = FONT_BOLD
+    _style_entete(ws, f"E{r_debut}:F{r_debut}")
     rf = r_debut + 1
     # Seules les features avec onglet dédié (conso > 0) sont cliquables.
     for code in codes_tries:
         if code not in codes_avec_onglet:
             continue
         onglet = str(code)[:31]
-        c = ws.cell(row=rf, column=3, value=code)
+        c = ws.cell(row=rf, column=5, value=code)
         c.hyperlink = f"#'{onglet}'!A1"
         c.font = font_lien
         titre = jira.get(code, {}).get("titre", "")
         # Ne pas répéter le code si le titre lui est identique (catégories).
         if titre and titre != code:
-            ws.cell(row=rf, column=4, value=titre)
+            ws.cell(row=rf, column=6, value=titre)
         rf += 1
-
-    # -- Colonne groupes de période (PI), si présents --
-    if onglets_pi:
-        ws.cell(row=r_debut, column=6, value="Groupes de période (PI)").font = FONT_BOLD
-        _style_entete(ws, f"F{r_debut}:F{r_debut}")
-        rp = r_debut + 1
-        for libelle, onglet in onglets_pi:
-            c = ws.cell(row=rp, column=6, value=libelle)
-            c.hyperlink = f"#'{onglet}'!A1"
-            c.font = font_lien
-            rp += 1
 
     return ws
 
@@ -1090,6 +1091,14 @@ def _ecrire_absences(wb, abs_data, noms_autorises=None):
                       .rename(columns={"Absence": "Total absences",
                                        "Présence": "Total présences"})
                       .sort_values(["Groupe_Periode"]))
+            # Réintégrer les dates de période (identiques quel que soit le filtre).
+            bornes = abs_data.get("bornes_pi", {})
+            par_pi["Début"] = par_pi["Groupe_Periode"].map(
+                lambda gp: bornes.get(gp, {}).get("min"))
+            par_pi["Fin"] = par_pi["Groupe_Periode"].map(
+                lambda gp: bornes.get(gp, {}).get("max"))
+            par_pi = par_pi[["Groupe_Periode", "Début", "Fin",
+                             "Total absences", "Total présences"]]
         else:
             par_pi = par_pi.iloc[0:0]  # vide
 
@@ -1110,11 +1119,17 @@ def _ecrire_absences(wb, abs_data, noms_autorises=None):
         for _, ligne in df.iterrows():
             for j, nom_col in enumerate(cols):
                 val = ligne[nom_col]
-                # Nombres -> float arrondi ; le reste en texte
-                if isinstance(val, (int, float)):
-                    ws.cell(row=r0, column=1 + j, value=round(float(val), 2))
+                cell = ws.cell(row=r0, column=1 + j)
+                # Dates -> vraie date Excel formatée JJ/MM/AAAA
+                if isinstance(val, date):
+                    cell.value = val
+                    cell.number_format = "DD/MM/YYYY"
+                elif isinstance(val, (int, float)):
+                    cell.value = round(float(val), 2)
+                elif val is None or (isinstance(val, float) and pd.isna(val)):
+                    cell.value = None
                 else:
-                    ws.cell(row=r0, column=1 + j, value=str(val))
+                    cell.value = str(val)
             r0 += 1
             nb += 1
         return r0 + 1, ligne_entete, nb, len(cols)  # +1 = ligne vide après
@@ -1175,6 +1190,13 @@ def _ecrire_onglets_pi(wb, abs_data, noms_autorises, font_lien):
         lien = ws.cell(row=2, column=1, value="← Retour au sommaire")
         lien.hyperlink = "#'Sommaire'!A1"
         lien.font = font_lien
+        # Légende : période couverte (dates de début / fin observées).
+        bornes = abs_data.get("bornes_pi", {}).get(str(pi), {})
+        d_min, d_max = bornes.get("min"), bornes.get("max")
+        if d_min and d_max:
+            ws.cell(row=2, column=3,
+                    value=f"Période : du {d_min.strftime('%d/%m/%Y')} "
+                          f"au {d_max.strftime('%d/%m/%Y')}").font = FONT_BOLD
 
         # En-tête du tableau
         r = 4
@@ -1214,52 +1236,50 @@ def _ecrire_onglets_pi(wb, abs_data, noms_autorises, font_lien):
         if sous_periodes:
             r2 = r + 3  # sous le tableau récap, en aérant
             ws.cell(row=r2, column=1,
-                    value=f"Détail par itération — {pi}").font = FONT_BOLD
+                    value=f"Détail par itération — {pi} (jours de présence)").font = FONT_BOLD
             r2 += 1
-            # Ligne 1 d'en-tête : Équipe, Collaborateur, puis le nom de chaque
-            # itération fusionné sur 2 colonnes (Abs / Prés).
-            ligne_sp = r2
+            # En-tête simple : Équipe, Collaborateur, puis une colonne de présence
+            # par itération (les absences ne sont pas répétées ici).
+            ligne_entete = r2
             ws.cell(row=r2, column=1, value="Équipe")
             ws.cell(row=r2, column=2, value="Collaborateur")
             col = 3
             for sp in sous_periodes:
-                # Nom court de l'itération : "PI 7 - Itération 1" -> "Itération 1"
+                # Nom court : "PI 7 - Itération 1" -> "Itération 1"
                 nom_it = sp.split(" - ", 1)[1] if " - " in sp else sp
                 ws.cell(row=r2, column=col, value=nom_it)
-                ws.merge_cells(start_row=r2, start_column=col,
-                               end_row=r2, end_column=col + 1)
-                col += 2
-            # Ligne 2 d'en-tête : Abs / Prés sous chaque itération.
-            r2 += 1
-            ws.cell(row=r2, column=1, value="")
-            ws.cell(row=r2, column=2, value="")
-            col = 3
-            for _ in sous_periodes:
-                ws.cell(row=r2, column=col, value="Abs.")
-                ws.cell(row=r2, column=col + 1, value="Prés.")
-                col += 2
-            derniere_col = 2 + 2 * len(sous_periodes)
-            _style_entete(ws, f"A{ligne_sp}:{get_column_letter(derniere_col)}{r2}")
+                col += 1
+            derniere_col = 2 + len(sous_periodes)
+            _style_entete(ws, f"A{ligne_entete}:{get_column_letter(derniere_col)}{ligne_entete}")
 
-            # Pivot : (Personne) x (Periode, Type) -> valeur
-            piv = (detail_pi.groupby(["Equipe", "Personne", "Periode", "Type"])
-                   ["Valeur"].sum())
+            # Pivot : (Personne) x Periode -> présence (Type == "Présence")
+            piv = (detail_pi[detail_pi["Type"] == "Présence"]
+                   .groupby(["Equipe", "Personne", "Periode"])["Valeur"].sum())
             r2 += 1
-            # Personnes de ce PI, triées
             personnes = (detail_pi[["Equipe", "Personne"]]
                          .drop_duplicates().sort_values(["Equipe", "Personne"]))
+            # Cumuls par itération pour la ligne TOTAL.
+            totaux = {sp: 0.0 for sp in sous_periodes}
             for _, pr in personnes.iterrows():
                 eq, nom = pr["Equipe"], pr["Personne"]
                 ws.cell(row=r2, column=1, value=str(eq))
                 ws.cell(row=r2, column=2, value=str(nom))
                 col = 3
                 for sp in sous_periodes:
-                    a = float(piv.get((eq, nom, sp, "Absence"), 0.0))
-                    p = float(piv.get((eq, nom, sp, "Présence"), 0.0))
-                    ws.cell(row=r2, column=col, value=round(a, 2))
-                    ws.cell(row=r2, column=col + 1, value=round(p, 2))
-                    col += 2
+                    p = float(piv.get((eq, nom, sp), 0.0))
+                    ws.cell(row=r2, column=col, value=round(p, 2))
+                    totaux[sp] += p
+                    col += 1
                 r2 += 1
+            # Ligne TOTAL
+            ws.cell(row=r2, column=1, value="TOTAL").font = FONT_BOLD
+            col = 3
+            for sp in sous_periodes:
+                ws.cell(row=r2, column=col,
+                        value=round(totaux[sp], 2)).font = FONT_BOLD
+                col += 1
+            for c in range(1, derniere_col + 1):
+                ws.cell(row=r2, column=c).fill = FILL_TOTAL
 
         crees.append((str(pi), nom_onglet))
 
