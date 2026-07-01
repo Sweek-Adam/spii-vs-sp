@@ -76,6 +76,24 @@ leur clé (Ressource + Projet + Livrable + Type), et si deux exports partagent d
 mois, le plus récent l'emporte. Le fichier `fusion.csv` produit se donne ensuite
 à `spii_v2.py` comme n'importe quel CSV (il gère un nombre de mois quelconque).
 
+### Absences (optionnel)
+
+Si le champ `absences` de `[chemins]` pointe vers le fichier Excel
+« CREA - Absences AAAA.xlsx », le rapport ajoute un onglet **Absences** (total
+annuel par personne, détail par personne/période, totaux par PI) et reprend, dans
+chaque onglet collaborateur, un encart des jours d'absence/présence de l'année.
+Les noms sont rapprochés automatiquement (accents, casse et ordre des mots
+tolérés). Laisse le champ vide pour ignorer cette partie. Le module
+`absences.py` doit être présent à côté de `spii_v2.py`.
+
+Le fichier d'absences vit sur SharePoint/OneDrive, qui ne se télécharge pas par
+une URL : il faut le **chemin local de ta copie synchronisée**. Pour le trouver :
+ouvre le fichier depuis l'app OneDrive/Explorateur, fais un clic droit dessus →
+« Copier le chemin d'accès » (Windows) ou « Copier » puis colle-le. Il ressemble
+à `C:\Users\TonNom\OneDrive - MSA\...\CREA - Absences 2026.xlsx`. Colle ce chemin
+dans le champ `absences`. Si le fichier n'est pas encore synchronisé en local,
+ouvre-le une fois depuis OneDrive pour déclencher la synchro.
+
 ## Lancer
 
 ```

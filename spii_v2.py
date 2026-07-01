@@ -1200,16 +1200,31 @@ def main():
     # Absences (optionnel) : si un chemin est configuré et le module présent.
     abs_data = None
     abs_path = str(cfg.get("chemins", {}).get("absences", "")).strip()
-    if abs_path and mod_absences is not None:
-        abs_path = os.path.normpath(abs_path)
-        if os.path.exists(abs_path):
-            print("Lecture du fichier d'absences...")
-            abs_data = chrono("Absences",
-                              lambda: mod_absences.charger_absences(abs_path))
-            if abs_data is None:
-                print("   ⚠ Aucune donnée d'absence extraite (fichier ignoré).")
+    if abs_path:
+        if mod_absences is None:
+            print("   ⚠ Absences demandées mais 'absences.py' est introuvable "
+                  "(place-le à côté de spii_v2.py). Étape ignorée.")
         else:
-            print(f"   ⚠ Fichier d'absences introuvable : {abs_path} (ignoré).")
+            abs_path = os.path.normpath(abs_path)
+            if not os.path.exists(abs_path):
+                print(f"   ⚠ Fichier d'absences introuvable :\n     {abs_path}")
+                print("     Vérifie le champ 'absences' dans config.toml. Si le "
+                      "fichier est sur OneDrive/SharePoint, il doit être "
+                      "synchronisé localement (le chemin pointe vers ta copie "
+                      "locale, pas vers une URL). Étape ignorée.")
+            else:
+                print("Lecture du fichier d'absences...")
+                try:
+                    abs_data = chrono(
+                        "Absences",
+                        lambda: mod_absences.charger_absences(abs_path))
+                except Exception as e:
+                    print(f"   ⚠ Lecture des absences impossible : {e}")
+                    print("     (le fichier est peut-être ouvert dans Excel ou "
+                          "en cours de synchronisation). Étape ignorée.")
+                    abs_data = None
+                if abs_data is None:
+                    print("   ⚠ Aucune donnée d'absence extraite (fichier ignoré).")
 
     print(f"Écriture du classeur openpyxl -> {os.path.basename(sortie)}...")
     chrono("Écriture openpyxl",
