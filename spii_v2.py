@@ -897,9 +897,10 @@ def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
 
 
 def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
-                     collab, entetes_mois, font_lien):
+                     collab, entetes_mois, font_lien, jira):
     """Onglet de garde : titre, infos de génération (date, projet, période),
-    quelques chiffres clés et des liens vers les onglets principaux."""
+    quelques chiffres clés, des liens vers les onglets principaux, et deux
+    colonnes de liens : un par collaborateur et un par feature (avec titre)."""
     ws = wb.create_sheet("Sommaire")
 
     ws.cell(row=1, column=1, value=f"Suivi de consommation — {projet}").font = FONT_TITRE
@@ -931,11 +932,45 @@ def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
     r += 1
     liens = [("Statistiques de synthèse", "Stats"),
              ("Suivi par feature", "Suivi_Features_" + projet)]
+    if "Absences" in wb.sheetnames:
+        liens.append(("Absences", "Absences"))
     for libelle, onglet in liens:
         c = ws.cell(row=r, column=1, value=f"→ {libelle}")
         c.hyperlink = f"#'{onglet}'!A1"
         c.font = font_lien
         r += 1
+
+    # Deux colonnes de liens : collaborateurs (col A) et features (col C-D).
+    r_debut = r + 2
+    # -- Colonne collaborateurs --
+    ws.cell(row=r_debut, column=1, value="Onglets collaborateurs").font = FONT_BOLD
+    _style_entete(ws, f"A{r_debut}:A{r_debut}")
+    rc = r_debut + 1
+    for nom in sorted(collab.keys()):
+        onglet = nom[:31]  # nom d'onglet tronqué comme à la création
+        c = ws.cell(row=rc, column=1, value=nom)
+        c.hyperlink = f"#'{onglet}'!A1"
+        c.font = font_lien
+        rc += 1
+
+    # -- Colonnes features (code + titre) --
+    ws.cell(row=r_debut, column=3, value="Onglet feature").font = FONT_BOLD
+    ws.cell(row=r_debut, column=4, value="Titre").font = FONT_BOLD
+    _style_entete(ws, f"C{r_debut}:D{r_debut}")
+    rf = r_debut + 1
+    # Seules les features avec onglet dédié (conso > 0) sont cliquables.
+    for code in codes_tries:
+        if code not in codes_avec_onglet:
+            continue
+        onglet = str(code)[:31]
+        c = ws.cell(row=rf, column=3, value=code)
+        c.hyperlink = f"#'{onglet}'!A1"
+        c.font = font_lien
+        titre = jira.get(code, {}).get("titre", "")
+        # Ne pas répéter le code si le titre lui est identique (catégories).
+        if titre and titre != code:
+            ws.cell(row=rf, column=4, value=titre)
+        rf += 1
 
     return ws
 
@@ -1136,7 +1171,7 @@ def ecrire_classeur(modele, jira, sortie_path, cfg, abs_data=None):
     # Onglet sommaire (créé en dernier, placé en premier ci-dessous)
     ws_sommaire = _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries,
                                    codes_avec_onglet, collab, entetes_mois,
-                                   FONT_LIEN)
+                                   FONT_LIEN, jira)
 
     # Ajustement automatique de la largeur des colonnes sur TOUS les onglets
     for ws in wb.worksheets:
