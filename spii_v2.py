@@ -51,6 +51,12 @@ from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.label import DataLabelList
 from openpyxl.utils import get_column_letter
 
+# Module de lecture des absences (optionnel : présent seulement si utilisé).
+try:
+    import absences as mod_absences
+except ImportError:
+    mod_absences = None
+
 # =====================================================================
 # CONFIGURATION
 # =====================================================================
@@ -934,7 +940,84 @@ def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
     return ws
 
 
-def ecrire_classeur(modele, jira, sortie_path, cfg):
+def _cle_nom(nom):
+    """Clé de rapprochement d'un nom : sans accents, minuscules, mots triés.
+    'Berthe Aurelie' et 'AURELIE  berthe' -> 'aurelie berthe'."""
+    base = _norm(nom)
+    mots = [m for m in re.split(r"\s+", base) if m]
+    return " ".join(sorted(mots))
+
+
+def _ajouter_absences_aux_collaborateurs(wb, collab, abs_data):
+    """Ajoute, dans chaque onglet collaborateur, un petit encart 'Absences'
+    (jours d'absence / présence / total sur l'année) en rapprochant les noms."""
+    # Index des totaux annuels d'absence par clé de nom normalisée.
+    index = {}
+    for _, ligne in abs_data["total_annuel"].iterrows():
+        index[_cle_nom(ligne["Personne"])] = {
+            "abs": float(ligne["Total absences"]),
+            "pres": float(ligne["Total présences"]),
+            "tot": float(ligne["Total jours"]),
+        }
+
+    for nom in collab.keys():
+        ws = wb[nom[:31]]
+        info = index.get(_cle_nom(nom))
+        # On place l'encart en colonne A, sous le tableau (2 lignes après TOTAL).
+        n_detail = len(collab[nom]["rows"])
+        r = 2 + n_detail + 3  # ligne TOTAL = 2+n_detail ; +3 pour aérer
+        ws.cell(row=r, column=1, value="Absences (année)").font = FONT_BOLD
+        if info:
+            ws.cell(row=r + 1, column=1, value="Jours d'absence")
+            ws.cell(row=r + 1, column=2, value=round(info["abs"], 2))
+            ws.cell(row=r + 2, column=1, value="Jours de présence")
+            ws.cell(row=r + 2, column=2, value=round(info["pres"], 2))
+            ws.cell(row=r + 3, column=1, value="Total jours").font = FONT_BOLD
+            ws.cell(row=r + 3, column=2, value=round(info["tot"], 2)).font = FONT_BOLD
+        else:
+            # Pas de correspondance trouvée dans le fichier d'absences.
+            ws.cell(row=r + 1, column=1,
+                    value="(non trouvé dans le fichier d'absences)")
+
+
+def _ecrire_absences(wb, abs_data):
+    """Onglet 'Absences' : trois tableaux issus du fichier d'absences —
+    total annuel par personne, détail par personne/période, et totaux par PI."""
+    ws = wb.create_sheet("Absences")
+    ws.cell(row=1, column=1, value="Absences / Présences").font = FONT_TITRE
+    ws.row_dimensions[1].height = 30
+    r = 3
+
+    def _ecrire_table(titre, df, r0):
+        ws.cell(row=r0, column=1, value=titre).font = FONT_BOLD
+        r0 += 1
+        cols = list(df.columns)
+        for j, nom_col in enumerate(cols):
+            ws.cell(row=r0, column=1 + j, value=str(nom_col))
+        _style_entete(ws, f"A{r0}:{get_column_letter(len(cols))}{r0}")
+        r0 += 1
+        for _, ligne in df.iterrows():
+            for j, nom_col in enumerate(cols):
+                val = ligne[nom_col]
+                # Nombres -> float arrondi ; le reste en texte
+                if isinstance(val, (int, float)):
+                    ws.cell(row=r0, column=1 + j, value=round(float(val), 2))
+                else:
+                    ws.cell(row=r0, column=1 + j, value=str(val))
+            r0 += 1
+        return r0 + 1  # une ligne vide après la table
+
+    r = _ecrire_table("Total annuel par personne", abs_data["total_annuel"], r)
+    r = _ecrire_table("Détail par personne et période",
+                      abs_data["par_personne_periode"], r)
+    r = _ecrire_table("Totaux par groupe de période (PI)",
+                      abs_data["par_pi"], r)
+
+    ws.freeze_panes = "A2"
+    return ws
+
+
+def ecrire_classeur(modele, jira, sortie_path, cfg, abs_data=None):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
 
@@ -970,6 +1053,12 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
 
     _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, FONT_LIEN)
 
+    # Onglet Absences + enrichissement des onglets collaborateurs (si fourni).
+    ws_absences = None
+    if abs_data:
+        ws_absences = _ecrire_absences(wb, abs_data)
+        _ajouter_absences_aux_collaborateurs(wb, collab, abs_data)
+
     # Onglet sommaire (créé en dernier, placé en premier ci-dessous)
     ws_sommaire = _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries,
                                    codes_avec_onglet, collab, entetes_mois,
@@ -979,12 +1068,19 @@ def ecrire_classeur(modele, jira, sortie_path, cfg):
     for ws in wb.worksheets:
         _ajuster_colonnes(ws)
 
-    # Ordre des onglets : Sommaire en 1er, puis Stats, puis le reste.
-    if "Stats" in wb.sheetnames:
-        wb._sheets.remove(ws_stats)
-        wb._sheets.insert(0, ws_stats)
-    wb._sheets.remove(ws_sommaire)
-    wb._sheets.insert(0, ws_sommaire)
+    # Ordre des onglets : Sommaire, Stats, Absences, puis le reste.
+    # On construit la liste des onglets prioritaires AVANT de les retirer, pour
+    # éviter que la vérification de présence ne change en cours de route.
+    ordre = [ws_sommaire]
+    stats_present = "Stats" in wb.sheetnames
+    if stats_present:
+        ordre.append(ws_stats)
+    if ws_absences is not None:
+        ordre.append(ws_absences)
+    for ws in ordre:
+        wb._sheets.remove(ws)
+    for i, ws in enumerate(ordre):
+        wb._sheets.insert(i, ws)
     wb.active = 0  # onglet actif à l'ouverture = Sommaire
 
     wb.save(sortie_path)
@@ -1101,9 +1197,23 @@ def main():
     print(f"Appels Jira ({len(codes)} {prefixe}, parallèle)...")
     jira = chrono("Jira", lambda: recuperer_jira(codes, cfg))
 
+    # Absences (optionnel) : si un chemin est configuré et le module présent.
+    abs_data = None
+    abs_path = str(cfg.get("chemins", {}).get("absences", "")).strip()
+    if abs_path and mod_absences is not None:
+        abs_path = os.path.normpath(abs_path)
+        if os.path.exists(abs_path):
+            print("Lecture du fichier d'absences...")
+            abs_data = chrono("Absences",
+                              lambda: mod_absences.charger_absences(abs_path))
+            if abs_data is None:
+                print("   ⚠ Aucune donnée d'absence extraite (fichier ignoré).")
+        else:
+            print(f"   ⚠ Fichier d'absences introuvable : {abs_path} (ignoré).")
+
     print(f"Écriture du classeur openpyxl -> {os.path.basename(sortie)}...")
     chrono("Écriture openpyxl",
-           lambda: ecrire_classeur(modele, jira, sortie, cfg))
+           lambda: ecrire_classeur(modele, jira, sortie, cfg, abs_data))
 
     # --- Récapitulatif ---
     stats = modele["stats"]
