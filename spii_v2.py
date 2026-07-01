@@ -897,10 +897,11 @@ def _ecrire_onglets_tcre(wb, codes_tries, stats, jira, cfg, collab, font_lien):
 
 
 def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
-                     collab, entetes_mois, font_lien, jira):
+                     collab, entetes_mois, font_lien, jira, onglets_pi=None):
     """Onglet de garde : titre, infos de génération (date, projet, période),
-    quelques chiffres clés, des liens vers les onglets principaux, et deux
-    colonnes de liens : un par collaborateur et un par feature (avec titre)."""
+    quelques chiffres clés, des liens vers les onglets principaux, et des
+    colonnes de liens : collaborateurs, features (avec titre), et groupes de
+    période (PI) si présents."""
     ws = wb.create_sheet("Sommaire")
 
     ws.cell(row=1, column=1, value=f"Suivi de consommation — {projet}").font = FONT_TITRE
@@ -971,6 +972,17 @@ def _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries, codes_avec_onglet,
         if titre and titre != code:
             ws.cell(row=rf, column=4, value=titre)
         rf += 1
+
+    # -- Colonne groupes de période (PI), si présents --
+    if onglets_pi:
+        ws.cell(row=r_debut, column=6, value="Groupes de période (PI)").font = FONT_BOLD
+        _style_entete(ws, f"F{r_debut}:F{r_debut}")
+        rp = r_debut + 1
+        for libelle, onglet in onglets_pi:
+            c = ws.cell(row=rp, column=6, value=libelle)
+            c.hyperlink = f"#'{onglet}'!A1"
+            c.font = font_lien
+            rp += 1
 
     return ws
 
@@ -1123,6 +1135,137 @@ def _ecrire_absences(wb, abs_data, noms_autorises=None):
     return ws
 
 
+def _nom_onglet_sur(base, wb):
+    """Nettoie un nom d'onglet (caractères interdits, longueur) et le rend
+    unique dans le classeur."""
+    nom = re.sub(r"[/\\?*\[\]:]", "-", str(base)).strip()[:31] or "PI"
+    final, i = nom, 2
+    while final in wb.sheetnames:
+        suffixe = f" ({i})"
+        final = nom[:31 - len(suffixe)] + suffixe
+        i += 1
+    return final
+
+
+def _ecrire_onglets_pi(wb, abs_data, noms_autorises, font_lien):
+    """Un onglet par groupe de période (PI 7, PI 8...) : absences / présences
+    de chaque collaborateur des ressources sur ce PI. Renvoie la liste des
+    (libellé PI, nom d'onglet) créés, pour le sommaire."""
+    brut = abs_data["brut"]
+    # On ne garde que les personnes des paramètres (ressources).
+    brut_f = brut[brut["Personne"].apply(lambda n: _cle_nom(n) in noms_autorises)]
+    if brut_f.empty:
+        return []
+
+    # Agrégation par PI + personne : total absence / présence.
+    agg = (brut_f.groupby(["Groupe_Periode", "Equipe", "Personne", "Type"])
+           ["Valeur"].sum().unstack(fill_value=0).reset_index())
+    for col in ("Absence", "Présence"):
+        if col not in agg.columns:
+            agg[col] = 0
+
+    crees = []
+    for pi in sorted(agg["Groupe_Periode"].unique()):
+        sous = agg[agg["Groupe_Periode"] == pi].sort_values(["Equipe", "Personne"])
+        nom_onglet = _nom_onglet_sur(str(pi), wb)
+        ws = wb.create_sheet(nom_onglet)
+        ws.cell(row=1, column=1, value=f"Absences / Présences — {pi}").font = FONT_TITRE
+        ws.row_dimensions[1].height = 30
+        # Lien retour vers le sommaire
+        lien = ws.cell(row=2, column=1, value="← Retour au sommaire")
+        lien.hyperlink = "#'Sommaire'!A1"
+        lien.font = font_lien
+
+        # En-tête du tableau
+        r = 4
+        entetes = ["Équipe", "Collaborateur", "Jours d'absence",
+                   "Jours de présence"]
+        for j, e in enumerate(entetes):
+            ws.cell(row=r, column=1 + j, value=e)
+        _style_entete(ws, f"A{r}:D{r}")
+        r += 1
+        tot_abs = tot_pres = 0.0
+        for _, ligne in sous.iterrows():
+            ws.cell(row=r, column=1, value=str(ligne["Equipe"]))
+            ws.cell(row=r, column=2, value=str(ligne["Personne"]))
+            a = round(float(ligne["Absence"]), 2)
+            p = round(float(ligne["Présence"]), 2)
+            ws.cell(row=r, column=3, value=a)
+            ws.cell(row=r, column=4, value=p)
+            tot_abs += a
+            tot_pres += p
+            r += 1
+        # Ligne TOTAL
+        ws.cell(row=r, column=1, value="TOTAL").font = FONT_BOLD
+        ws.cell(row=r, column=3, value=round(tot_abs, 2)).font = FONT_BOLD
+        ws.cell(row=r, column=4, value=round(tot_pres, 2)).font = FONT_BOLD
+        for c in range(1, 5):
+            ws.cell(row=r, column=c).fill = FILL_TOTAL
+        # Filtre sur les données (hors TOTAL) + figement de l'en-tête
+        n_data = r - 5
+        if n_data >= 1:
+            ws.auto_filter.ref = f"A4:D{4 + n_data}"
+        ws.freeze_panes = "A5"
+
+        # --- Tableau détaillé par sous-période (itérations du PI) ---
+        # Colonnes : Équipe, Collaborateur, puis (Abs / Prés) par itération.
+        detail_pi = brut_f[brut_f["Groupe_Periode"] == pi]
+        sous_periodes = sorted(detail_pi["Periode"].unique())
+        if sous_periodes:
+            r2 = r + 3  # sous le tableau récap, en aérant
+            ws.cell(row=r2, column=1,
+                    value=f"Détail par itération — {pi}").font = FONT_BOLD
+            r2 += 1
+            # Ligne 1 d'en-tête : Équipe, Collaborateur, puis le nom de chaque
+            # itération fusionné sur 2 colonnes (Abs / Prés).
+            ligne_sp = r2
+            ws.cell(row=r2, column=1, value="Équipe")
+            ws.cell(row=r2, column=2, value="Collaborateur")
+            col = 3
+            for sp in sous_periodes:
+                # Nom court de l'itération : "PI 7 - Itération 1" -> "Itération 1"
+                nom_it = sp.split(" - ", 1)[1] if " - " in sp else sp
+                ws.cell(row=r2, column=col, value=nom_it)
+                ws.merge_cells(start_row=r2, start_column=col,
+                               end_row=r2, end_column=col + 1)
+                col += 2
+            # Ligne 2 d'en-tête : Abs / Prés sous chaque itération.
+            r2 += 1
+            ws.cell(row=r2, column=1, value="")
+            ws.cell(row=r2, column=2, value="")
+            col = 3
+            for _ in sous_periodes:
+                ws.cell(row=r2, column=col, value="Abs.")
+                ws.cell(row=r2, column=col + 1, value="Prés.")
+                col += 2
+            derniere_col = 2 + 2 * len(sous_periodes)
+            _style_entete(ws, f"A{ligne_sp}:{get_column_letter(derniere_col)}{r2}")
+
+            # Pivot : (Personne) x (Periode, Type) -> valeur
+            piv = (detail_pi.groupby(["Equipe", "Personne", "Periode", "Type"])
+                   ["Valeur"].sum())
+            r2 += 1
+            # Personnes de ce PI, triées
+            personnes = (detail_pi[["Equipe", "Personne"]]
+                         .drop_duplicates().sort_values(["Equipe", "Personne"]))
+            for _, pr in personnes.iterrows():
+                eq, nom = pr["Equipe"], pr["Personne"]
+                ws.cell(row=r2, column=1, value=str(eq))
+                ws.cell(row=r2, column=2, value=str(nom))
+                col = 3
+                for sp in sous_periodes:
+                    a = float(piv.get((eq, nom, sp, "Absence"), 0.0))
+                    p = float(piv.get((eq, nom, sp, "Présence"), 0.0))
+                    ws.cell(row=r2, column=col, value=round(a, 2))
+                    ws.cell(row=r2, column=col + 1, value=round(p, 2))
+                    col += 2
+                r2 += 1
+
+        crees.append((str(pi), nom_onglet))
+
+    return crees
+
+
 def ecrire_classeur(modele, jira, sortie_path, cfg, abs_data=None):
     wb = Workbook()
     wb.remove(wb.active)  # retire la feuille vide par défaut
@@ -1161,17 +1304,20 @@ def ecrire_classeur(modele, jira, sortie_path, cfg, abs_data=None):
 
     # Onglet Absences + enrichissement des onglets collaborateurs (si fourni).
     ws_absences = None
+    onglets_pi = []  # [(libellé PI, nom d'onglet), ...] pour le sommaire
     if abs_data:
         # Ensemble des noms du fichier de paramètres (= collaborateurs affichés),
         # normalisés, pour ne montrer qu'eux dans l'onglet Absences.
         noms_ressources = {_cle_nom(nom) for nom in collab.keys()}
         ws_absences = _ecrire_absences(wb, abs_data, noms_ressources)
         _ajouter_absences_aux_collaborateurs(wb, collab, abs_data)
+        # Un onglet par groupe de période (PI), filtré sur les ressources.
+        onglets_pi = _ecrire_onglets_pi(wb, abs_data, noms_ressources, FONT_LIEN)
 
     # Onglet sommaire (créé en dernier, placé en premier ci-dessous)
     ws_sommaire = _ecrire_sommaire(wb, cfg, projet, prefixe, codes_tries,
                                    codes_avec_onglet, collab, entetes_mois,
-                                   FONT_LIEN, jira)
+                                   FONT_LIEN, jira, onglets_pi)
 
     # Ajustement automatique de la largeur des colonnes sur TOUS les onglets
     for ws in wb.worksheets:
