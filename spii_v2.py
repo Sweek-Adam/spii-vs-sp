@@ -949,53 +949,117 @@ def _cle_nom(nom):
 
 
 def _ajouter_absences_aux_collaborateurs(wb, collab, abs_data):
-    """Ajoute, dans chaque onglet collaborateur, un petit encart 'Absences'
-    (jours d'absence / présence / total sur l'année) en rapprochant les noms."""
-    # Index des totaux annuels d'absence par clé de nom normalisée.
-    index = {}
+    """Ajoute, dans chaque onglet collaborateur, un encart 'Absences' : le total
+    annuel puis le détail par période, en rapprochant les noms."""
+    # Index des totaux annuels par clé de nom normalisée.
+    index_annuel = {}
     for _, ligne in abs_data["total_annuel"].iterrows():
-        index[_cle_nom(ligne["Personne"])] = {
+        index_annuel[_cle_nom(ligne["Personne"])] = {
             "abs": float(ligne["Total absences"]),
             "pres": float(ligne["Total présences"]),
             "tot": float(ligne["Total jours"]),
         }
 
+    # Index du détail par période : clé de nom -> liste de (période, abs, pres).
+    index_periode = {}
+    for _, ligne in abs_data["par_personne_periode"].iterrows():
+        cle = _cle_nom(ligne["Personne"])
+        index_periode.setdefault(cle, []).append((
+            str(ligne["Periode"]),
+            float(ligne["Jours d'absence"]),
+            float(ligne["Jours de présence"]),
+        ))
+
     for nom in collab.keys():
         ws = wb[nom[:31]]
-        info = index.get(_cle_nom(nom))
-        # On place l'encart en colonne A, sous le tableau (2 lignes après TOTAL).
+        cle = _cle_nom(nom)
+        info = index_annuel.get(cle)
+        # Encart placé sous le tableau (la ligne TOTAL est en 2 + n_detail).
         n_detail = len(collab[nom]["rows"])
-        r = 2 + n_detail + 3  # ligne TOTAL = 2+n_detail ; +3 pour aérer
+        r = 2 + n_detail + 3  # +3 pour aérer
+
         ws.cell(row=r, column=1, value="Absences (année)").font = FONT_BOLD
-        if info:
-            ws.cell(row=r + 1, column=1, value="Jours d'absence")
-            ws.cell(row=r + 1, column=2, value=round(info["abs"], 2))
-            ws.cell(row=r + 2, column=1, value="Jours de présence")
-            ws.cell(row=r + 2, column=2, value=round(info["pres"], 2))
-            ws.cell(row=r + 3, column=1, value="Total jours").font = FONT_BOLD
-            ws.cell(row=r + 3, column=2, value=round(info["tot"], 2)).font = FONT_BOLD
-        else:
-            # Pas de correspondance trouvée dans le fichier d'absences.
+        if not info:
             ws.cell(row=r + 1, column=1,
                     value="(non trouvé dans le fichier d'absences)")
+            continue
+
+        ws.cell(row=r + 1, column=1, value="Jours d'absence")
+        ws.cell(row=r + 1, column=2, value=round(info["abs"], 2))
+        ws.cell(row=r + 2, column=1, value="Jours de présence")
+        ws.cell(row=r + 2, column=2, value=round(info["pres"], 2))
+        ws.cell(row=r + 3, column=1, value="Total jours").font = FONT_BOLD
+        ws.cell(row=r + 3, column=2, value=round(info["tot"], 2)).font = FONT_BOLD
+
+        # Détail par période, sous le total annuel.
+        periodes = sorted(index_periode.get(cle, []), key=lambda x: x[0])
+        if periodes:
+            rp = r + 5
+            ws.cell(row=rp, column=1, value="Absences par période").font = FONT_BOLD
+            rp += 1
+            ws.cell(row=rp, column=1, value="Période")
+            ws.cell(row=rp, column=2, value="Jours d'absence")
+            ws.cell(row=rp, column=3, value="Jours de présence")
+            _style_entete(ws, f"A{rp}:C{rp}")
+            rp += 1
+            for periode, abs_j, pres_j in periodes:
+                ws.cell(row=rp, column=1, value=periode)
+                ws.cell(row=rp, column=2, value=round(abs_j, 2))
+                ws.cell(row=rp, column=3, value=round(pres_j, 2))
+                rp += 1
 
 
-def _ecrire_absences(wb, abs_data):
+def _ecrire_absences(wb, abs_data, noms_autorises=None):
     """Onglet 'Absences' : trois tableaux issus du fichier d'absences —
-    total annuel par personne, détail par personne/période, et totaux par PI."""
+    total annuel par personne, détail par personne/période, et totaux par PI.
+    Si noms_autorises est fourni (ensemble de clés de noms normalisées), seules
+    ces personnes sont affichées."""
     ws = wb.create_sheet("Absences")
     ws.cell(row=1, column=1, value="Absences / Présences").font = FONT_TITRE
     ws.row_dimensions[1].height = 30
+
+    # Filtrage éventuel sur les personnes du fichier de paramètres (ressources).
+    total_annuel = abs_data["total_annuel"]
+    par_personne_periode = abs_data["par_personne_periode"]
+    par_pi = abs_data["par_pi"]
+    if noms_autorises is not None:
+        def _garde(df):
+            masque = df["Personne"].apply(lambda n: _cle_nom(n) in noms_autorises)
+            return df[masque]
+        total_annuel = _garde(total_annuel)
+        par_personne_periode = _garde(par_personne_periode)
+        # par_pi n'a pas de colonne Personne : on le recalcule depuis le détail
+        # brut restreint aux personnes autorisées.
+        brut = abs_data["brut"]
+        brut_f = brut[brut["Personne"].apply(
+            lambda n: _cle_nom(n) in noms_autorises)]
+        if not brut_f.empty:
+            g = (brut_f.groupby(["Groupe_Periode", "Type"])["Valeur"].sum()
+                 .unstack(fill_value=0))
+            for col in ("Absence", "Présence"):
+                if col not in g.columns:
+                    g[col] = 0
+            par_pi = (g[["Absence", "Présence"]].reset_index()
+                      .rename(columns={"Absence": "Total absences",
+                                       "Présence": "Total présences"})
+                      .sort_values(["Groupe_Periode"]))
+        else:
+            par_pi = par_pi.iloc[0:0]  # vide
+
     r = 3
 
     def _ecrire_table(titre, df, r0):
+        """Écrit un tableau et renvoie (ligne_suivante, ligne_entete, nb_lignes,
+        nb_cols) pour pouvoir poser un filtre ensuite."""
         ws.cell(row=r0, column=1, value=titre).font = FONT_BOLD
         r0 += 1
+        ligne_entete = r0
         cols = list(df.columns)
         for j, nom_col in enumerate(cols):
             ws.cell(row=r0, column=1 + j, value=str(nom_col))
         _style_entete(ws, f"A{r0}:{get_column_letter(len(cols))}{r0}")
         r0 += 1
+        nb = 0
         for _, ligne in df.iterrows():
             for j, nom_col in enumerate(cols):
                 val = ligne[nom_col]
@@ -1005,13 +1069,20 @@ def _ecrire_absences(wb, abs_data):
                 else:
                     ws.cell(row=r0, column=1 + j, value=str(val))
             r0 += 1
-        return r0 + 1  # une ligne vide après la table
+            nb += 1
+        return r0 + 1, ligne_entete, nb, len(cols)  # +1 = ligne vide après
 
-    r = _ecrire_table("Total annuel par personne", abs_data["total_annuel"], r)
-    r = _ecrire_table("Détail par personne et période",
-                      abs_data["par_personne_periode"], r)
-    r = _ecrire_table("Totaux par groupe de période (PI)",
-                      abs_data["par_pi"], r)
+    # Tableau PI en premier : c'est celui qui reçoit le filtre (Excel n'autorise
+    # qu'un seul auto-filtre par feuille).
+    r, ent_pi, nb_pi, nc_pi = _ecrire_table(
+        "Totaux par groupe de période (PI)", par_pi, r)
+    r, _, _, _ = _ecrire_table("Total annuel par personne", total_annuel, r)
+    r, _, _, _ = _ecrire_table("Détail par personne et période",
+                               par_personne_periode, r)
+
+    # Filtre sur les en-têtes du tableau PI (le premier).
+    if nb_pi > 0:
+        ws.auto_filter.ref = f"A{ent_pi}:{get_column_letter(nc_pi)}{ent_pi + nb_pi}"
 
     ws.freeze_panes = "A2"
     return ws
@@ -1056,7 +1127,10 @@ def ecrire_classeur(modele, jira, sortie_path, cfg, abs_data=None):
     # Onglet Absences + enrichissement des onglets collaborateurs (si fourni).
     ws_absences = None
     if abs_data:
-        ws_absences = _ecrire_absences(wb, abs_data)
+        # Ensemble des noms du fichier de paramètres (= collaborateurs affichés),
+        # normalisés, pour ne montrer qu'eux dans l'onglet Absences.
+        noms_ressources = {_cle_nom(nom) for nom in collab.keys()}
+        ws_absences = _ecrire_absences(wb, abs_data, noms_ressources)
         _ajouter_absences_aux_collaborateurs(wb, collab, abs_data)
 
     # Onglet sommaire (créé en dernier, placé en premier ci-dessous)
